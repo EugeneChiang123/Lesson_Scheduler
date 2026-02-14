@@ -1,5 +1,6 @@
 const express = require('express');
 const store = require('../db/store');
+const { getSlotsForDate } = require('./slots');
 
 const router = express.Router();
 
@@ -81,6 +82,18 @@ router.post('/', (req, res) => {
 
     const recurringGroupId = allowRecurring && recurringCount > 1 ? `rg_${Date.now()}_${Math.random().toString(36).slice(2)}` : null;
 
+    // Ensure each startTime is an allowed slot for that date (from eventType.availability)
+    for (const st of startTimes) {
+      const normalized = st.replace(' ', 'T').substring(0, 19);
+      const dateStr = normalized.substring(0, 10);
+      const possibleSlots = getSlotsForDate(eventType, dateStr);
+      if (!possibleSlots.includes(normalized)) {
+        return res.status(400).json({ error: 'Requested time is not an available slot for this event type', requestedStart: normalized });
+      }
+    }
+
+    // Validate no overlaps so we never leave partial data on 409
+    const slotsToInsert = [];
     for (const st of startTimes) {
       const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
       const endNorm = addMinutes(startNorm, duration);
@@ -88,6 +101,10 @@ router.post('/', (req, res) => {
       if (conflicting) {
         return res.status(409).json({ error: 'Slot no longer available', conflictingStart: startNorm });
       }
+      slotsToInsert.push({ startNorm, endNorm });
+    }
+
+    for (const { startNorm, endNorm } of slotsToInsert) {
       store.bookings.insert({
         event_type_id: eventType.id,
         start_time: startNorm,

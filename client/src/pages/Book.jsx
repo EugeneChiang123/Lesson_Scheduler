@@ -31,7 +31,10 @@ export default function Book() {
       return;
     }
     setSlotsLoading(true);
-    const dateStr = selectedDate.toISOString().slice(0, 10);
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
     fetch(`${API}/event-types/${eventTypeSlug}/slots?date=${dateStr}`)
       .then((r) => (r.ok ? r.json() : []))
       .then(setSlots)
