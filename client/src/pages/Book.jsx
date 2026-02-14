@@ -60,7 +60,12 @@ export default function Book() {
 
   useEffect(() => {
     fetch(`${API}/event-types/${eventTypeSlug}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Not found'))))
+      .then(async (r) => {
+        if (r.ok) return r.json();
+        const body = await r.json().catch(() => ({}));
+        const msg = body.error || `Request failed (${r.status})`;
+        throw new Error(msg);
+      })
       .then(setEventType)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -109,7 +114,19 @@ export default function Book() {
   };
 
   if (loading) return <div style={styles.page}>Loading…</div>;
-  if (error) return <div style={styles.page}>Error: {error}</div>;
+  if (error) {
+    return (
+      <div style={styles.page}>
+        <div style={styles.errorTitle}>Error: {error}</div>
+        <div style={styles.errorDetail}>
+          Requested event type: <code>{eventTypeSlug}</code>
+        </div>
+        <div style={styles.errorHint}>
+          If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage.
+        </div>
+      </div>
+    );
+  }
   if (!eventType) return null;
 
   if (success) {
@@ -396,6 +413,23 @@ const styles = {
     minHeight: '100vh',
     background: '#f9fafb',
     padding: '24px 16px',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 600,
+    color: '#b91c1c',
+    marginBottom: 8,
+  },
+  errorDetail: {
+    fontSize: 14,
+    color: MUTED,
+    marginBottom: 12,
+  },
+  errorHint: {
+    fontSize: 13,
+    color: MUTED,
+    lineHeight: 1.5,
+    maxWidth: 480,
   },
   twoCol: {
     display: 'grid',

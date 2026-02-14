@@ -7,11 +7,15 @@
     "client": "cd client && npm run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "cd client && npm install && npm run build",
-    "db:migrate": "node server/db/migrate.js"
+    "db:migrate": "node server/db/migrate.js",
+    "db:migrate-pg": "node server/db/migrate-pg.js",
+    "db:seed-pg": "node server/db/seed-from-json.js"
   },
   "dependencies": {
+    "@vercel/postgres": "^0.10.0",
     "cors": "^2.8.5",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "pg": "^8.11.0"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

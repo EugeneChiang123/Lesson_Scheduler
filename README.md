@@ -4,14 +4,50 @@
 
 - **Student side:** Landing page with a booking link → calendar → pick day → see available slots → fill form (name, phone, email) → submit → backend stores booking and confirms.
 - **Instructor side (no auth):** One setup UI (protected by shared secret or open for v1) to create/edit event types. Each event type has its own URL slug, description, duration, weekly availability, mandatory fields, and optional "book repeatedly" + number of repeated bookings.
-- **Stack:** Node.js + Express (API), React (SPA for both booking and instructor UIs). Persistence: JSON files in `server/db/` (v1).
+- **Stack:** Node.js + Express (API), React (SPA for both booking and instructor UIs). Persistence: file store (JSON) or Postgres; see below.
 
 ### Run locally
 
 1. From the repo root: `npm install` then `cd client && npm install`.
-2. Create data files: `node server/db/migrate.js`.
-3. Start API and client: `npm run dev` (API on port 3001, React dev server on port 3000 with proxy to API).
-4. Open http://localhost:3000 — use **Instructor setup** to create an event type (name, slug, weekly availability), then open the booking link or use the landing example link.
+2. **Without a database:** Create data files: `npm run db:migrate`. Data lives in `server/db/*.json`.
+3. **With Postgres (optional):** Set `POSTGRES_URL` or `DATABASE_URL` in `.env`, then run `npm run db:migrate-pg` once. Optionally seed from existing JSON: `npm run db:seed-pg`.
+4. Start API and client: `npm run dev` (API on port 3001, React dev server on port 3000 with proxy to API).
+5. Open http://localhost:3000 — use **Instructor setup** to create an event type (name, slug, weekly availability), then open the booking link or use the landing example link.
+
+---
+
+## Persistence: database and data store
+
+**Database** here means the actual persistence technology (e.g. **Postgres**). It stores tables, runs SQL, and persists across restarts and across multiple processes.
+
+**Data store** is the app’s abstraction for reading and writing that data: the object in `server/db/store.js` used by the API (`store.eventTypes.*`, `store.bookings.*`). The data store has a single interface; its **backing** can be files or a database.
+
+- **File-backed store** (`store-file.js`): JSON files in `server/db/` locally, or in `/tmp` on Vercel. No setup, but on Vercel `/tmp` is ephemeral and not shared between serverless invocations, so creating an event and then opening the booking link in a new window can hit a different instance with no data and show “Event type not found.”
+- **Postgres-backed store** (`store-pg.js`): When `POSTGRES_URL` or `DATABASE_URL` is set, the app uses this. All instances share the same database, so event types and bookings persist and the booking link works from any window or request.
+
+**How the app chooses:** `server/db/store.js` checks for `POSTGRES_URL` or `DATABASE_URL`. If set, it exports the Postgres store; otherwise the file store. No code changes in routes.
+
+### Using Postgres (e.g. on Vercel)
+
+1. **Create a Postgres database**  
+   Any Postgres with a connection URL works. On Vercel, use the **Neon** integration (Vercel Marketplace) or another provider (e.g. Supabase). Add the connection URL as `POSTGRES_URL` (or `DATABASE_URL`) in the project’s environment variables.
+
+2. **Run the migration once**  
+   So tables exist. Locally: set `POSTGRES_URL` in `.env`, then from the repo root run:
+   ```bash
+   npm run db:migrate-pg
+   ```
+   On Vercel you can run this once from your machine with `POSTGRES_URL` set to the same URL, or use your provider’s SQL console to run the contents of `server/db/schema.sql`.
+
+3. **Optional: seed from existing JSON**  
+   If you have data in `server/db/event_types.json` and `server/db/bookings.json` and want to copy it into Postgres (e.g. after first setting up the DB):
+   ```bash
+   npm run db:seed-pg
+   ```
+   Tables should be empty or have matching ids; re-running may hit duplicate-key errors.
+
+4. **Deploy**  
+   With `POSTGRES_URL` set in Vercel, the serverless API will use Postgres. Creating an event and opening the booking link in a new window will then work, because every request reads from the same database.
 
 ---
 
@@ -189,3 +225,9 @@ New features are documented here as Step 2, Step 3, and so on. Each time we add 
   - Month view: Slightly larger day cells and spacing; event pills use a blue tint.
   - Week view: Same event pill style; clearer hour/day labels.
   - Day view: Event blocks with more padding and light background; time, name, event type, and "Session X of Y" when recurring.
+
+---
+
+## Implementation plans
+
+Detailed implementation plans (e.g. Add Real Database for Vercel: schema, steps, files changed, risk) are in **[planning.md](planning.md)**. The README above summarizes what the app does and how to run it; planning.md holds the step-by-step plan and rollout notes.

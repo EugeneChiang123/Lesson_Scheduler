@@ -39,17 +39,17 @@ function getSlotsForDate(eventType, dateStr) {
 }
 
 // GET /api/event-types/:slug/slots?date=YYYY-MM-DD
-router.get('/:slug/slots', (req, res) => {
+router.get('/:slug/slots', async (req, res) => {
   try {
     const { slug } = req.params;
     const { date } = req.query;
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Valid date (YYYY-MM-DD) required' });
 
-    const eventType = store.eventTypes.getBySlug(slug);
+    const eventType = await store.eventTypes.getBySlug(slug);
     if (!eventType) return res.status(404).json({ error: 'Event type not found' });
 
     const possibleSlots = getSlotsForDate(eventType, date);
-    const bookedOnDate = store.bookings.getBookingsOnDate(date);
+    const bookedOnDate = await store.bookings.getBookingsOnDate(date);
     const duration = eventType.durationMinutes ?? 30;
     const now = new Date();
     const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');

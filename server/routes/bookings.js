@@ -6,10 +6,10 @@ const { getSlotsForDate } = require('./slots');
 const router = express.Router();
 
 // GET /api/bookings - list all (for instructor calendar)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const list = store.bookings.list();
-    const eventTypes = store.eventTypes.all();
+    const list = await store.bookings.list();
+    const eventTypes = await store.eventTypes.all();
     const byEventId = Object.fromEntries(eventTypes.map((e) => [e.id, e]));
     const sorted = list.map((b) => {
       const et = byEventId[b.event_type_id];
@@ -52,14 +52,14 @@ function addMinutes(isoStr, minutes) {
 }
 
 // POST /api/bookings
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { eventTypeSlug, startTime, firstName, lastName, email, phone } = req.body;
     if (!eventTypeSlug || !startTime || !firstName || !lastName || !email || !phone) {
       return res.status(400).json({ error: 'eventTypeSlug, startTime, firstName, lastName, email, phone required' });
     }
 
-    const eventType = store.eventTypes.getBySlug(eventTypeSlug);
+    const eventType = await store.eventTypes.getBySlug(eventTypeSlug);
     if (!eventType) return res.status(404).json({ error: 'Event type not found' });
 
     const duration = eventType.durationMinutes || 30;
@@ -106,7 +106,7 @@ router.post('/', (req, res) => {
     for (const st of startTimes) {
       const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
       const endNorm = addMinutes(startNorm, duration);
-      const conflicting = store.bookings.findOverlapping(startNorm, endNorm);
+      const conflicting = await store.bookings.findOverlapping(startNorm, endNorm);
       if (conflicting) {
         return res.status(409).json({ error: 'Slot no longer available', conflictingStart: startNorm });
       }
@@ -114,7 +114,7 @@ router.post('/', (req, res) => {
     }
 
     for (const { startNorm, endNorm } of slotsToInsert) {
-      store.bookings.insert({
+      await store.bookings.insert({
         event_type_id: eventType.id,
         start_time: startNorm,
         end_time: endNorm,

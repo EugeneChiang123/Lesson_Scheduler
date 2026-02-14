@@ -4,9 +4,9 @@ const store = require('../db/store');
 const router = express.Router();
 
 // GET /api/event-types - list all (instructor UI)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const rows = store.eventTypes.all();
+    const rows = await store.eventTypes.all();
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -14,9 +14,9 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/event-types/id/:id - get one by id (instructor edit) — must be before /:slug
-router.get('/id/:id', (req, res) => {
+router.get('/id/:id', async (req, res) => {
   try {
-    const row = store.eventTypes.getById(req.params.id);
+    const row = await store.eventTypes.getById(req.params.id);
     if (!row) return res.status(404).json({ error: 'Event type not found' });
     res.json(row);
   } catch (err) {
@@ -25,9 +25,9 @@ router.get('/id/:id', (req, res) => {
 });
 
 // GET /api/event-types/:slug - public details for booking page
-router.get('/:slug', (req, res) => {
+router.get('/:slug', async (req, res) => {
   try {
-    const row = store.eventTypes.getBySlug(req.params.slug);
+    const row = await store.eventTypes.getBySlug(req.params.slug);
     if (!row) return res.status(404).json({ error: 'Event type not found' });
     res.json(row);
   } catch (err) {
@@ -36,11 +36,11 @@ router.get('/:slug', (req, res) => {
 });
 
 // POST /api/event-types - create
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
     if (!slug || !name) return res.status(400).json({ error: 'slug and name required' });
-    const row = store.eventTypes.create({
+    const row = await store.eventTypes.create({
       slug,
       name: name || '',
       description: description || '',
@@ -57,13 +57,13 @@ router.post('/', (req, res) => {
 });
 
 // PATCH /api/event-types/:id - update
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const existing = store.eventTypes.getById(id);
+    const existing = await store.eventTypes.getById(id);
     if (!existing) return res.status(404).json({ error: 'Event type not found' });
     const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
-    const updated = store.eventTypes.update(id, {
+    const updated = await store.eventTypes.update(id, {
       slug,
       name,
       description,
