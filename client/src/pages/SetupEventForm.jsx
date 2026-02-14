@@ -142,7 +142,7 @@ export default function SetupEventForm() {
               min={2}
               max={52}
               value={form.recurringCount}
-              onChange={(e) => setForm((f) => ({ ...f, recurringCount: Math.max(2, Number(e.target.value) || 2) }))}
+              onChange={(e) => setForm((f) => ({ ...f, recurringCount: Math.min(52, Math.max(2, Number(e.target.value) || 2)) }))}
               style={styles.input}
             />
             <p style={styles.hint}>Student will be booked for this many weekly sessions in a row.</p>

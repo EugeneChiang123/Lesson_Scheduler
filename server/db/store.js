@@ -18,7 +18,7 @@ const eventTypesPath = path.join(dataDir, 'event_types.json');
 const bookingsPath = path.join(dataDir, 'bookings.json');
 
 /** Max recurring sessions per booking (e.g. ~1 year weekly). Avoids runaway writes and long sync work. */
-const MAX_RECURRING_COUNT = 24;
+const MAX_RECURRING_COUNT = 52;
 
 function clampRecurringCount(n) {
   const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
