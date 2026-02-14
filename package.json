@@ -6,7 +6,7 @@
     "server": "node server/index.js",
     "client": "cd client && npm run dev",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "build": "cd client && npm run build",
+    "build": "cd client && npm install && npm run build",
     "db:migrate": "node server/db/migrate.js"
   },
   "dependencies": {
