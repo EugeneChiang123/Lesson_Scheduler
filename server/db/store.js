@@ -5,6 +5,14 @@ const dataDir = path.join(__dirname);
 const eventTypesPath = path.join(dataDir, 'event_types.json');
 const bookingsPath = path.join(dataDir, 'bookings.json');
 
+/** Max recurring sessions per booking (e.g. ~1 year weekly). Avoids runaway writes and long sync work. */
+const MAX_RECURRING_COUNT = 24;
+
+function clampRecurringCount(n) {
+  const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
+  return Math.min(MAX_RECURRING_COUNT, Math.max(1, val));
+}
+
 function readEventTypes() {
   try {
     const raw = fs.readFileSync(eventTypesPath, 'utf8');
@@ -67,7 +75,7 @@ const store = {
         description: data.description || '',
         durationMinutes: duration,
         allowRecurring: Boolean(data.allowRecurring),
-        recurringCount: Math.max(1, data.recurringCount ?? 1),
+        recurringCount: clampRecurringCount(data.recurringCount ?? 1),
         availability: Array.isArray(data.availability) ? data.availability : [],
       };
       list.push(row);
@@ -89,7 +97,7 @@ const store = {
         description: data.description !== undefined ? data.description : row.description,
         durationMinutes: nextDuration,
         allowRecurring: data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : row.allowRecurring,
-        recurringCount: data.recurringCount !== undefined ? Math.max(1, data.recurringCount) : row.recurringCount,
+        recurringCount: data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(row.recurringCount),
         availability: data.availability !== undefined ? data.availability : row.availability,
       };
       list[idx] = updated;
@@ -126,3 +134,4 @@ const store = {
 };
 
 module.exports = store;
+module.exports.clampRecurringCount = clampRecurringCount;

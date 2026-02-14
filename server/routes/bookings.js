@@ -1,5 +1,6 @@
 const express = require('express');
 const store = require('../db/store');
+const { clampRecurringCount } = store;
 const { getSlotsForDate } = require('./slots');
 
 const router = express.Router();
@@ -63,7 +64,7 @@ router.post('/', (req, res) => {
 
     const duration = eventType.durationMinutes || 30;
     const allowRecurring = Boolean(eventType.allowRecurring);
-    const recurringCount = Math.max(1, eventType.recurringCount || 1);
+    const recurringCount = clampRecurringCount(eventType.recurringCount ?? 1);
 
     const startTimes = [startTime];
     if (allowRecurring && recurringCount > 1) {
