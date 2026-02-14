@@ -166,3 +166,26 @@ New features are documented here as Step 2, Step 3, and so on. Each time we add 
 - **Week view**: Seven-day week with hourly rows; each cell shows bookings that start in that hour on that day with **full name**.
 - **Day view**: Single day with **lesson count** at top ("X lessons today" or "No lessons today"). Each booking shows time range, **full name**, event type name, and **"Session X of Y"** when part of a recurring series.
 - **API**: `GET /api/bookings` returns all bookings with `full_name`, `event_type_name`, and `recurring_session` (index/total) for calendar use.
+
+**Step 4: Recurring count server-side cap**
+
+- **Problem:** `recurringCount` was only floored (min 1), never capped. A large stored value could make `POST /api/bookings` create thousands of sessions in one request (long sync work, huge `bookings.json` writes).
+- **Solution:** A maximum recurring count (e.g. 52, ~1 year weekly) is enforced server-side.
+- **Store** (`server/db/store.js`): On event type create and update, `recurringCount` is clamped to `[1, MAX_RECURRING_COUNT]` via `clampRecurringCount()`. On update, existing values are re-clamped when reading so old or hand-edited data is corrected on save.
+- **Bookings route** (`server/routes/bookings.js`): When building recurring sessions for `POST /api/bookings`, the count used is `clampRecurringCount(eventType.recurringCount)` so even pre-existing large values never create more than the cap per request.
+
+**Step 5: Calendly-style UI (booking page + instructor calendar)**
+
+- **Booking page** (`/book/:eventTypeSlug`):
+  - **Layout:** Two columns on desktop (event summary left, steps right); single column on mobile (summary then steps). Event summary card is sticky on desktop only.
+  - **Calendar:** One month at a time with ‹ / › month navigation; selected date has a clear highlight (primary background). Past days disabled.
+  - **Time slots:** Shown as chip-style buttons in a wrapped row ("Choose a time").
+  - **Form:** Same fields (first name, last name, email, phone) with placeholders; single "Schedule event" button.
+  - **Success:** "You're scheduled" with checkmark, short confirmation text, and **Add to calendar** link that opens Google Calendar with the event pre-filled (title, start, end).
+  - **Design:** Light gray page background, white cards, shared borders/shadows, primary color for actions and links.
+- **Instructor calendar** (`/setup/bookings`):
+  - Same design system as the booking page (background, borders, primary color, border radius, shadows).
+  - Toolbar: Prev (‹) / Today / Next (›) and Day | Week | Month use consistent button styling.
+  - Month view: Slightly larger day cells and spacing; event pills use a blue tint.
+  - Week view: Same event pill style; clearer hour/day labels.
+  - Day view: Event blocks with more padding and light background; time, name, event type, and "Session X of Y" when recurring.

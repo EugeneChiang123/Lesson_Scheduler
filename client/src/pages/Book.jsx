@@ -3,11 +3,52 @@ import { useParams } from 'react-router-dom';
 
 const API = '/api';
 
+const PRIMARY = '#0a7ea4';
+const BORDER = '#e5e7eb';
+const MUTED = '#6b7280';
+
+function useMediaQuery(query) {
+  const [match, setMatch] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : true));
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    setMatch(m.matches);
+    const handler = (e) => setMatch(e.matches);
+    m.addEventListener('change', handler);
+    return () => m.removeEventListener('change', handler);
+  }, [query]);
+  return match;
+}
+
+function buildAddToCalendarUrl(eventName, startTimeIso, durationMinutes) {
+  const start = new Date(startTimeIso.replace(' ', 'T'));
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const fmt = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    return `${y}${m}${day}T${h}${min}${s}`;
+  };
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: eventName,
+    dates: `${fmt(start)}/${fmt(end)}`,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export default function Book() {
   const { eventTypeSlug } = useParams();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [eventType, setEventType] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
   const [selectedDate, setSelectedDate] = useState(null);
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -72,22 +113,36 @@ export default function Book() {
   if (!eventType) return null;
 
   if (success) {
+    const calendarUrl = buildAddToCalendarUrl(
+      eventType.name,
+      selectedSlot.replace(' ', 'T'),
+      eventType.durationMinutes || 30
+    );
     return (
       <div style={styles.page}>
-        <div style={styles.card}>
-          <h2 style={styles.successTitle}>You’re booked</h2>
-          <p>Your booking has been confirmed. We’ll see you then.</p>
+        <div style={isDesktop ? styles.twoCol : styles.singleCol}>
+          <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+          <div style={styles.stepCard}>
+            <div style={styles.successBlock}>
+              <div style={styles.successIcon}>✓</div>
+              <h2 style={styles.successTitle}>You're scheduled</h2>
+              <p style={styles.successText}>
+                Your booking has been confirmed. We'll see you then.
+              </p>
+              <a
+                href={calendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.addToCalendar}
+              >
+                Add to calendar
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
-
-  const month = selectedDate ? selectedDate.getMonth() : new Date().getMonth();
-  const year = selectedDate ? selectedDate.getFullYear() : new Date().getFullYear();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   const formatSlot = (s) => {
     const d = new Date(s.replace(' ', 'T'));
@@ -96,150 +151,395 @@ export default function Book() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.name}>{eventType.name}</h1>
-        {eventType.description && <p style={styles.desc}>{eventType.description}</p>}
-        <p style={styles.meta}>{eventType.durationMinutes} min</p>
-        {eventType.allowRecurring && eventType.recurringCount > 1 && (
-          <p style={styles.recurring}>You’re booking {eventType.recurringCount} weekly sessions at this time.</p>
-        )}
-
-        {!selectedDate ? (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Select a day</h2>
-            <div style={styles.calendar}>
-              <div style={styles.weekdayRow}>
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                  <span key={d} style={styles.weekday}>{d}</span>
-                ))}
-              </div>
-              <div style={styles.grid}>
-                {Array.from({ length: firstDay }, (_, i) => (
-                  <span key={`e-${i}`} style={styles.empty} />
-                ))}
-                {Array.from({ length: daysInMonth }, (_, i) => {
-                  const d = new Date(year, month, i + 1);
-                  const isPast = d < today;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      style={{ ...styles.day, ...(isPast ? styles.dayPast : {}) }}
-                      disabled={isPast}
-                      onClick={() => setSelectedDate(d)}
-                    >
-                      {i + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        ) : !selectedSlot ? (
-          <section style={styles.section}>
-            <button type="button" style={styles.back} onClick={() => setSelectedDate(null)}>← Change day</button>
-            <h2 style={styles.sectionTitle}>
-              {selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-            </h2>
-            {slotsLoading ? (
-              <p>Loading slots…</p>
-            ) : slots.length === 0 ? (
-              <p style={styles.noSlots}>No available slots this day.</p>
-            ) : (
-              <div style={styles.slotGrid}>
-                {slots.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    style={styles.slotBtn}
-                    onClick={() => setSelectedSlot(s)}
-                  >
-                    {formatSlot(s)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-        ) : (
-          <section style={styles.section}>
-            <button type="button" style={styles.back} onClick={() => setSelectedSlot(null)}>← Change time</button>
-            <p style={styles.selectedTime}>{formatSlot(selectedSlot)}</p>
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <label style={styles.label}>
-                First name *
-                <input
-                  required
-                  value={form.firstName}
-                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                  style={styles.input}
-                />
-              </label>
-              <label style={styles.label}>
-                Last name *
-                <input
-                  required
-                  value={form.lastName}
-                  onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                  style={styles.input}
-                />
-              </label>
-              <label style={styles.label}>
-                Email *
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  style={styles.input}
-                />
-              </label>
-              <label style={styles.label}>
-                Phone *
-                <input
-                  type="tel"
-                  required
-                  value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  style={styles.input}
-                />
-              </label>
-              {submitError && <p style={styles.submitError}>{submitError}</p>}
-              <button type="submit" disabled={submitting} style={styles.submit}>
-                {submitting ? 'Booking…' : 'Confirm booking'}
-              </button>
-            </form>
-          </section>
-        )}
+      <div style={isDesktop ? styles.twoCol : styles.singleCol}>
+        <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+        <div style={styles.stepCard}>
+          {!selectedDate ? (
+            <CalendarStep
+              viewMonth={viewMonth}
+              setViewMonth={setViewMonth}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+            />
+          ) : !selectedSlot ? (
+            <SlotsStep
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              slots={slots}
+              slotsLoading={slotsLoading}
+              setSelectedSlot={setSelectedSlot}
+              formatSlot={formatSlot}
+            />
+          ) : (
+            <FormStep
+              selectedSlot={selectedSlot}
+              setSelectedSlot={setSelectedSlot}
+              formatSlot={formatSlot}
+              form={form}
+              setForm={setForm}
+              handleSubmit={handleSubmit}
+              submitting={submitting}
+              submitError={submitError}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+function EventSummaryCard({ eventType, sticky = true }) {
+  return (
+    <div style={{ ...styles.summaryCard, ...(sticky ? styles.summaryCardSticky : {}) }}>
+      <h1 style={styles.summaryName}>{eventType.name}</h1>
+      {eventType.description && (
+        <p style={styles.summaryDesc}>{eventType.description}</p>
+      )}
+      <p style={styles.summaryMeta}>{eventType.durationMinutes} min</p>
+      {eventType.allowRecurring && eventType.recurringCount > 1 && (
+        <p style={styles.summaryRecurring}>
+          You're booking {eventType.recurringCount} weekly sessions at this time.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CalendarStep({ viewMonth, setViewMonth, selectedDate, setSelectedDate }) {
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const prevMonth = () => setViewMonth(new Date(year, month - 1, 1));
+  const nextMonth = () => setViewMonth(new Date(year, month + 1, 1));
+  const monthTitle = new Date(year, month, 1).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const isSelected = (d) =>
+    selectedDate &&
+    selectedDate.getFullYear() === d.getFullYear() &&
+    selectedDate.getMonth() === d.getMonth() &&
+    selectedDate.getDate() === d.getDate();
+
+  return (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>Select a date</h2>
+      <div style={styles.monthNav}>
+        <button type="button" style={styles.monthNavBtn} onClick={prevMonth} aria-label="Previous month">
+          ‹
+        </button>
+        <span style={styles.monthNavTitle}>{monthTitle}</span>
+        <button type="button" style={styles.monthNavBtn} onClick={nextMonth} aria-label="Next month">
+          ›
+        </button>
+      </div>
+      <div style={styles.weekdayRow}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+          <span key={d} style={styles.weekday}>{d}</span>
+        ))}
+      </div>
+      <div style={styles.grid}>
+        {Array.from({ length: firstDay }, (_, i) => (
+          <span key={`e-${i}`} style={styles.empty} />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const d = new Date(year, month, i + 1);
+          const past = d < today;
+          const selected = isSelected(d);
+          return (
+            <button
+              key={i}
+              type="button"
+              style={{
+                ...styles.day,
+                ...(past ? styles.dayPast : {}),
+                ...(selected ? styles.daySelected : {}),
+              }}
+              disabled={past}
+              onClick={() => setSelectedDate(d)}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SlotsStep({
+  selectedDate,
+  setSelectedDate,
+  slots,
+  slotsLoading,
+  setSelectedSlot,
+  formatSlot,
+}) {
+  return (
+    <section style={styles.section}>
+      <button
+        type="button"
+        style={styles.back}
+        onClick={() => setSelectedDate(null)}
+      >
+        ‹ Change date
+      </button>
+      <h2 style={styles.sectionTitle}>
+        {selectedDate.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        })}
+      </h2>
+      <p style={styles.sectionSub}>Choose a time</p>
+      {slotsLoading ? (
+        <p style={styles.muted}>Loading times…</p>
+      ) : slots.length === 0 ? (
+        <p style={styles.noSlots}>No available times this day.</p>
+      ) : (
+        <div style={styles.slotList}>
+          {slots.map((s) => (
+            <button
+              key={s}
+              type="button"
+              style={styles.slotChip}
+              onClick={() => setSelectedSlot(s)}
+            >
+              {formatSlot(s)}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FormStep({
+  selectedSlot,
+  setSelectedSlot,
+  formatSlot,
+  form,
+  setForm,
+  handleSubmit,
+  submitting,
+  submitError,
+}) {
+  return (
+    <section style={styles.section}>
+      <button
+        type="button"
+        style={styles.back}
+        onClick={() => setSelectedSlot(null)}
+      >
+        ‹ Change time
+      </button>
+      <p style={styles.selectedTime}>{formatSlot(selectedSlot)}</p>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <label style={styles.label}>
+          <span style={styles.labelText}>First name</span>
+          <input
+            required
+            placeholder="John"
+            value={form.firstName}
+            onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>Last name</span>
+          <input
+            required
+            placeholder="Doe"
+            value={form.lastName}
+            onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>Email</span>
+          <input
+            type="email"
+            required
+            placeholder="john@example.com"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>Phone</span>
+          <input
+            type="tel"
+            required
+            placeholder="+1 234 567 8900"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            style={styles.input}
+          />
+        </label>
+        {submitError && <p style={styles.submitError}>{submitError}</p>}
+        <button type="submit" disabled={submitting} style={styles.submit}>
+          {submitting ? 'Scheduling…' : 'Schedule event'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 const styles = {
-  page: { maxWidth: 480, margin: '0 auto', padding: 24 },
-  card: { background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
-  name: { margin: '0 0 8px', fontSize: 22 },
-  desc: { color: '#555', margin: '0 0 8px', whiteSpace: 'pre-wrap' },
-  meta: { color: '#666', fontSize: 14, margin: '0 0 16px' },
-  recurring: { color: '#0a7ea4', fontSize: 14, margin: '0 0 16px' },
-  section: { marginTop: 24 },
-  sectionTitle: { fontSize: 16, margin: '0 0 12px' },
-  back: { background: 'none', border: 'none', color: '#0a7ea4', cursor: 'pointer', marginBottom: 12, padding: 0 },
-  calendar: { marginTop: 8 },
-  weekdayRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 },
-  weekday: { fontSize: 12, color: '#666', textAlign: 'center' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 },
+  page: {
+    minHeight: '100vh',
+    background: '#f9fafb',
+    padding: '24px 16px',
+  },
+  twoCol: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(280px, 360px) 1fr',
+    gap: 48,
+    maxWidth: 920,
+    margin: '0 auto',
+    alignItems: 'start',
+  },
+  singleCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 24,
+    maxWidth: 480,
+    margin: '0 auto',
+  },
+  summaryCard: {
+    background: '#fff',
+    borderRadius: 12,
+    padding: 28,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: `1px solid ${BORDER}`,
+  },
+  summaryCardSticky: { position: 'sticky', top: 24 },
+  summaryName: { margin: '0 0 10px', fontSize: 22, fontWeight: 600, color: '#111' },
+  summaryDesc: { color: MUTED, margin: '0 0 12px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
+  summaryMeta: { color: MUTED, fontSize: 14, margin: 0 },
+  summaryRecurring: { color: PRIMARY, fontSize: 14, margin: '12px 0 0' },
+  stepCard: {
+    background: '#fff',
+    borderRadius: 12,
+    padding: 28,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+    border: `1px solid ${BORDER}`,
+  },
+  section: { margin: 0 },
+  sectionTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 4px', color: '#111' },
+  sectionSub: { fontSize: 14, color: MUTED, margin: '0 0 16px' },
+  monthNav: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: 20,
+    color: '#374151',
+  },
+  monthNavTitle: { fontSize: 16, fontWeight: 600, color: '#111' },
+  weekdayRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: 4,
+    marginBottom: 8,
+  },
+  weekday: { fontSize: 11, color: MUTED, textAlign: 'center', fontWeight: 500 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 },
   empty: {},
-  day: { aspectRatio: 1, border: '1px solid #ddd', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 14 },
-  dayPast: { opacity: 0.4, cursor: 'not-allowed' },
-  noSlots: { color: '#666' },
-  slotGrid: { display: 'flex', flexWrap: 'wrap', gap: 8 },
-  slotBtn: { padding: '10px 16px', border: '1px solid #ddd', borderRadius: 8, background: '#fff', cursor: 'pointer' },
-  selectedTime: { fontWeight: 600, marginBottom: 16 },
-  form: { display: 'flex', flexDirection: 'column', gap: 16 },
-  label: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14 },
-  input: { padding: 10, border: '1px solid #ccc', borderRadius: 8 },
-  submitError: { color: '#c00', fontSize: 14 },
-  submit: { padding: 12, background: '#0a7ea4', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
-  successTitle: { margin: '0 0 8px', color: '#0a7ea4' },
+  day: {
+    aspectRatio: 1,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#111',
+  },
+  dayPast: { opacity: 0.4, cursor: 'not-allowed', background: '#f9fafb' },
+  daySelected: { background: PRIMARY, color: '#fff', borderColor: PRIMARY },
+  back: {
+    background: 'none',
+    border: 'none',
+    color: PRIMARY,
+    cursor: 'pointer',
+    marginBottom: 16,
+    padding: 0,
+    fontSize: 14,
+  },
+  muted: { color: MUTED, fontSize: 14 },
+  noSlots: { color: MUTED, fontSize: 14 },
+  slotList: { display: 'flex', flexWrap: 'wrap', gap: 10 },
+  slotChip: {
+    padding: '10px 18px',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    background: '#fff',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#111',
+  },
+  selectedTime: { fontWeight: 600, fontSize: 16, margin: '0 0 20px', color: '#111' },
+  form: { display: 'flex', flexDirection: 'column', gap: 18 },
+  label: { display: 'flex', flexDirection: 'column', gap: 6 },
+  labelText: { fontSize: 14, fontWeight: 500, color: '#374151' },
+  input: {
+    padding: '10px 12px',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    fontSize: 15,
+  },
+  submitError: { color: '#dc2626', fontSize: 14, margin: 0 },
+  submit: {
+    padding: 14,
+    background: PRIMARY,
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  successBlock: { textAlign: 'center', padding: '8px 0' },
+  successIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: '50%',
+    background: '#d1fae5',
+    color: '#059669',
+    fontSize: 28,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '0 auto 16px',
+    fontWeight: 600,
+  },
+  successTitle: { margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: '#111' },
+  successText: { color: MUTED, margin: '0 0 20px', fontSize: 15 },
+  addToCalendar: {
+    display: 'inline-block',
+    color: PRIMARY,
+    fontWeight: 600,
+    fontSize: 14,
+    textDecoration: 'none',
+  },
 };
