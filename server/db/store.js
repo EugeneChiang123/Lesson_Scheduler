@@ -65,6 +65,7 @@ function initIds() {
 initIds();
 
 const store = {
+  clampRecurringCount,
   eventTypes: {
     all() {
       return readEventTypes();
@@ -153,4 +154,3 @@ const store = {
 };
 
 module.exports = store;
-module.exports.clampRecurringCount = clampRecurringCount;
