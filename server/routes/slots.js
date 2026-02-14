@@ -6,7 +6,8 @@ const router = express.Router();
 function getSlotsForDate(eventType, dateStr) {
   const date = new Date(dateStr + 'T00:00:00');
   const day = date.getDay();
-  const duration = eventType.durationMinutes || 30;
+  const duration = eventType.durationMinutes ?? 30;
+  if (!Number.isFinite(duration) || duration <= 0) return [];
   const availability = eventType.availability || [];
   const windows = availability.filter((a) => a.day === day);
   if (windows.length === 0) return [];
@@ -51,3 +52,4 @@ router.get('/:slug/slots', (req, res) => {
 });
 
 module.exports = router;
+module.exports.getSlotsForDate = getSlotsForDate;

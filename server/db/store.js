@@ -58,12 +58,14 @@ const store = {
     create(data) {
       const list = readEventTypes();
       if (list.some((e) => e.slug === data.slug)) throw new Error('Slug already exists');
+      const duration = data.durationMinutes ?? 30;
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationMinutes must be a positive number');
       const row = {
         id: eventTypeId++,
         slug: data.slug,
         name: data.name,
         description: data.description || '',
-        durationMinutes: data.durationMinutes ?? 30,
+        durationMinutes: duration,
         allowRecurring: Boolean(data.allowRecurring),
         recurringCount: Math.max(1, data.recurringCount ?? 1),
         availability: Array.isArray(data.availability) ? data.availability : [],
@@ -78,12 +80,14 @@ const store = {
       if (idx === -1) return null;
       if (data.slug !== undefined && list.some((e) => e.id !== Number(id) && e.slug === data.slug)) throw new Error('Slug already exists');
       const row = list[idx];
+      const nextDuration = data.durationMinutes !== undefined ? data.durationMinutes : row.durationMinutes;
+      if (!Number.isFinite(nextDuration) || nextDuration <= 0) throw new Error('durationMinutes must be a positive number');
       const updated = {
         ...row,
         slug: data.slug !== undefined ? data.slug : row.slug,
         name: data.name !== undefined ? data.name : row.name,
         description: data.description !== undefined ? data.description : row.description,
-        durationMinutes: data.durationMinutes !== undefined ? data.durationMinutes : row.durationMinutes,
+        durationMinutes: nextDuration,
         allowRecurring: data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : row.allowRecurring,
         recurringCount: data.recurringCount !== undefined ? Math.max(1, data.recurringCount) : row.recurringCount,
         availability: data.availability !== undefined ? data.availability : row.availability,
