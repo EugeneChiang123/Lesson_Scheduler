@@ -20,12 +20,12 @@ Decisions, implementation order, rollout, and history. For system design (data m
 4. Public booking page — calendar, slots, form, submit.
 5. Create booking(s) API — validation, conflict check, insert one or N.
 6. Landing page — link to `/book/:eventTypeSlug`.
-7. Recurring in UI — “N weekly sessions” copy, POST creates N bookings.
+7. Recurring in UI — "N weekly sessions" copy, POST creates N bookings.
 
 ### Feature additions (steps)
 
 - **Step 2:** Instructor landing (`/setup`), create/edit event pages, recurring badge and option.
-- **Step 3:** Bookings calendar (`/setup/bookings`) — day/week/month views, full name, recurring session “X of Y”.
+- **Step 3:** Bookings calendar (`/setup/bookings`) — day/week/month views, full name, recurring session "X of Y".
 - **Step 4:** Recurring count server-side cap (e.g. 52) via `clampRecurringCount` in store and bookings route.
 - **Step 5:** Calendly-style UI — two-column booking page, sticky summary, slot chips, add-to-calendar link; matching design for instructor calendar.
 
@@ -35,13 +35,13 @@ Instructor login; multi-tenant; custom fields; calendar sync / email reminders /
 
 ### Open points
 
-- **Recurrence rule:** Currently “same weekday/time, weekly, for N bookings.” Could be made configurable (e.g. every 2 weeks, or student picks interval).
+- **Recurrence rule:** Currently "same weekday/time, weekly, for N bookings." Could be made configurable (e.g. every 2 weeks, or student picks interval).
 
 ---
 
 ## Part 2 — Add real database for Vercel
 
-**Goal:** Replace the file-based store with Postgres so event types and bookings persist on Vercel and the “Event type not found” bug when opening the booking link in a new window is fixed.
+**Goal:** Replace the file-based store with Postgres so event types and bookings persist on Vercel and the "Event type not found" bug when opening the booking link in a new window is fixed.
 
 **Why:** On Vercel the app used `/tmp`, which is ephemeral and not shared between serverless invocations. A real database gives one persistent source of truth.
 
@@ -56,7 +56,7 @@ Instructor login; multi-tenant; custom fields; calendar sync / email reminders /
 3. **Postgres store** — Implement `server/db/store-pg.js` with same API; snake_case columns, JSONB for availability, TIMESTAMPTZ for times.
 4. **Store switcher** — In `server/db/store.js`, use Postgres when `POSTGRES_URL` set, else `server/db/store-file.js` (file store with Promise API). Routes use async/await.
 5. **Optional seed** — `server/db/seed-from-json.js`; run `npm run db:seed-pg` to copy existing JSON into Postgres.
-6. **Deploy and verify** — Deploy with `POSTGRES_URL` set; run migration; create event type and open booking link in new window — should load without “Event type not found”.
+6. **Deploy and verify** — Deploy with `POSTGRES_URL` set; run migration; create event type and open booking link in new window — should load without "Event type not found".
 
 ### Files added or changed
 
