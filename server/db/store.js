@@ -1,7 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname);
+// On Vercel, the deployment filesystem is read-only; use /tmp so writes succeed.
+// Data in /tmp is ephemeral (per function instance) and not shared across regions.
+const dataDir = process.env.VERCEL
+  ? (() => {
+      const dir = path.join('/tmp', 'lesson-scheduler-db');
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (e) {
+        /* ignore */
+      }
+      return dir;
+    })()
+  : path.join(__dirname);
 const eventTypesPath = path.join(dataDir, 'event_types.json');
 const bookingsPath = path.join(dataDir, 'bookings.json');
 
@@ -112,15 +124,22 @@ const store = {
     getByEventTypeAndDate(eventTypeId, dateStr) {
       return readBookings().filter((b) => b.event_type_id === eventTypeId && (b.start_time.startsWith(dateStr) || b.start_time.replace(' ', 'T').startsWith(dateStr)));
     },
-    findOverlapping(eventTypeId, startTime, endTime) {
+    /** All bookings on this date (any event type). Used to block slots across event types so the instructor is not double-booked. */
+    getBookingsOnDate(dateStr) {
+      return readBookings().filter((b) => {
+        const s = b.start_time.replace(' ', 'T');
+        return s.startsWith(dateStr);
+      });
+    },
+    /** Returns any booking that overlaps [startTime, endTime], regardless of event type, so one instructor cannot be double-booked across different event links. */
+    findOverlapping(startTime, endTime) {
       const list = readBookings();
       const start = startTime.replace(' ', 'T');
       const end = endTime.replace(' ', 'T');
       return list.find((b) => {
-        if (b.event_type_id !== eventTypeId) return false;
         const bStart = b.start_time.replace(' ', 'T');
         const bEnd = b.end_time.replace(' ', 'T');
-        return (start < bEnd && end > bStart);
+        return start < bEnd && end > bStart;
       });
     },
     insert(record) {

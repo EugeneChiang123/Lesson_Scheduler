@@ -3,6 +3,12 @@ const store = require('../db/store');
 
 const router = express.Router();
 
+function addMinutesForSlots(isoStr, minutes) {
+  const d = new Date(isoStr.replace(' ', 'T'));
+  d.setMinutes(d.getMinutes() + minutes);
+  return d.toISOString().slice(0, 19);
+}
+
 function getSlotsForDate(eventType, dateStr) {
   const date = new Date(dateStr + 'T00:00:00');
   const day = date.getDay();
@@ -12,7 +18,7 @@ function getSlotsForDate(eventType, dateStr) {
   const windows = availability.filter((a) => a.day === day);
   if (windows.length === 0) return [];
 
-  const slots = [];
+  const slotSet = new Set();
   for (const w of windows) {
     const [startH, startM] = w.start.split(':').map(Number);
     const [endH, endM] = w.end.split(':').map(Number);
@@ -23,10 +29,11 @@ function getSlotsForDate(eventType, dateStr) {
       const m = minutes % 60;
       const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       const startTime = `${dateStr}T${timeStr}:00`;
-      slots.push(startTime);
+      slotSet.add(startTime);
       minutes += duration;
     }
   }
+  const slots = [...slotSet];
   slots.sort();
   return slots;
 }
@@ -42,9 +49,21 @@ router.get('/:slug/slots', (req, res) => {
     if (!eventType) return res.status(404).json({ error: 'Event type not found' });
 
     const possibleSlots = getSlotsForDate(eventType, date);
-    const booked = store.bookings.getByEventTypeAndDate(eventType.id, date);
-    const bookedSet = new Set(booked.map((b) => b.start_time.replace(' ', 'T')));
-    const available = possibleSlots.filter((s) => !bookedSet.has(s));
+    const bookedOnDate = store.bookings.getBookingsOnDate(date);
+    const duration = eventType.durationMinutes ?? 30;
+    const now = new Date();
+    const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const available = possibleSlots.filter((slotStart) => {
+      const start = slotStart.replace(' ', 'T');
+      if (date === todayStr && new Date(start) <= now) return false;
+      const slotEnd = addMinutesForSlots(start, duration);
+      const overlaps = bookedOnDate.some((b) => {
+        const bStart = b.start_time.replace(' ', 'T');
+        const bEnd = b.end_time.replace(' ', 'T');
+        return start < bEnd && slotEnd > bStart;
+      });
+      return !overlaps;
+    });
     res.json(available);
   } catch (err) {
     res.status(500).json({ error: err.message });

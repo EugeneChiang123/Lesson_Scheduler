@@ -83,6 +83,14 @@ router.post('/', (req, res) => {
 
     const recurringGroupId = allowRecurring && recurringCount > 1 ? `rg_${Date.now()}_${Math.random().toString(36).slice(2)}` : null;
 
+    const now = new Date();
+    for (const st of startTimes) {
+      const slotStart = new Date(st.replace(' ', 'T'));
+      if (slotStart <= now) {
+        return res.status(400).json({ error: 'Cannot create booking in the past', requestedStart: st });
+      }
+    }
+
     // Ensure each startTime is an allowed slot for that date (from eventType.availability)
     for (const st of startTimes) {
       const normalized = st.replace(' ', 'T').substring(0, 19);
@@ -98,7 +106,7 @@ router.post('/', (req, res) => {
     for (const st of startTimes) {
       const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
       const endNorm = addMinutes(startNorm, duration);
-      const conflicting = store.bookings.findOverlapping(eventType.id, startNorm, endNorm);
+      const conflicting = store.bookings.findOverlapping(startNorm, endNorm);
       if (conflicting) {
         return res.status(409).json({ error: 'Slot no longer available', conflictingStart: startNorm });
       }
