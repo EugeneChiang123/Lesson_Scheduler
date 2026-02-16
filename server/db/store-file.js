@@ -22,6 +22,22 @@ const bookingsPath = path.join(dataDir, 'bookings.json');
 
 const MAX_RECURRING_COUNT = 52;
 
+/** In-memory mutex per event_type_id so check-then-insert is atomic per type (prevents double booking). */
+const bookingMutexByEventType = new Map();
+async function withBookingMutex(eventTypeId, fn) {
+  const prev = bookingMutexByEventType.get(eventTypeId) || Promise.resolve();
+  let resolveNext;
+  const next = new Promise((r) => { resolveNext = r; });
+  bookingMutexByEventType.set(eventTypeId, next);
+  try {
+    await prev;
+    return await fn();
+  } finally {
+    resolveNext();
+    if (bookingMutexByEventType.get(eventTypeId) === next) bookingMutexByEventType.delete(eventTypeId);
+  }
+}
+
 function clampRecurringCount(n) {
   const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
   return Math.min(MAX_RECURRING_COUNT, Math.max(1, val));
@@ -154,6 +170,48 @@ const store = {
       list.push(row);
       writeBookings(list);
       return Promise.resolve(row);
+    },
+
+    /**
+     * Atomically check for overlaps and insert all slots under a mutex per event type.
+     * Prevents two concurrent requests from double-booking the same slot.
+     * @param {number} eventTypeId
+     * @param {{ start_time: string, end_time: string }[]} slots
+     * @param {{ first_name: string, last_name: string, email: string, phone?: string, recurring_group_id?: string }} guest
+     * @returns {Promise<{ created: object[] } | { conflict: true, conflictingStart: string }>}
+     */
+    async createBatchIfNoConflict(eventTypeId, slots, guest) {
+      return withBookingMutex(eventTypeId, () => {
+        const list = readBookings();
+        for (const slot of slots) {
+          const start = slot.start_time.replace(' ', 'T');
+          const end = slot.end_time.replace(' ', 'T');
+          const found = list.find((b) => {
+            const bStart = b.start_time.replace(' ', 'T');
+            const bEnd = b.end_time.replace(' ', 'T');
+            return start < bEnd && end > bStart;
+          });
+          if (found) return Promise.resolve({ conflict: true, conflictingStart: slot.start_time });
+        }
+        const created = [];
+        for (const slot of slots) {
+          const row = {
+            id: bookingId++,
+            event_type_id: eventTypeId,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            first_name: guest.first_name,
+            last_name: guest.last_name,
+            email: guest.email,
+            phone: guest.phone || null,
+            recurring_group_id: guest.recurring_group_id || null,
+          };
+          list.push(row);
+          created.push(row);
+        }
+        writeBookings(list);
+        return Promise.resolve({ created });
+      });
     },
   },
 };
