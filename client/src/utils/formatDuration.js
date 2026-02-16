@@ -5,6 +5,9 @@
  */
 export function formatDuration(minutes) {
   const m = minutes ?? 30;
-  if (m >= 60) return `${m / 60} hr`;
+  if (m >= 60) {
+    const hrs = m / 60;
+    return `${hrs} ${hrs === 1 ? 'hr' : 'hrs'}`;
+  }
   return `${m} min`;
 }
