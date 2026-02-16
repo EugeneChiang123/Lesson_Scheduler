@@ -101,34 +101,23 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Validate no overlaps so we never leave partial data on 409
-    const slotsToInsert = [];
-    for (const st of startTimes) {
+    // Build slots and insert atomically (transaction with row lock in Postgres, mutex in file store)
+    // so two simultaneous requests for the same slot cannot both pass the conflict check.
+    const slots = startTimes.map((st) => {
       const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
       const endNorm = addMinutes(startNorm, duration);
-      const conflicting = await store.bookings.findOverlapping(startNorm, endNorm);
-      if (conflicting) {
-        return res.status(409).json({ error: 'Slot no longer available', conflictingStart: startNorm });
-      }
-      slotsToInsert.push({ startNorm, endNorm });
-    }
+      return { start_time: startNorm, end_time: endNorm };
+    });
+    const guest = { first_name: firstName, last_name: lastName, email, phone, recurring_group_id: recurringGroupId };
+    const result = await store.bookings.createBatchIfNoConflict(eventType.id, slots, guest);
 
-    for (const { startNorm, endNorm } of slotsToInsert) {
-      await store.bookings.insert({
-        event_type_id: eventType.id,
-        start_time: startNorm,
-        end_time: endNorm,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        recurring_group_id: recurringGroupId,
-      });
+    if (result.conflict) {
+      return res.status(409).json({ error: 'Slot no longer available', conflictingStart: result.conflictingStart });
     }
 
     res.status(201).json({
       success: true,
-      count: startTimes.length,
+      count: result.created.length,
       recurringGroupId,
     });
   } catch (err) {

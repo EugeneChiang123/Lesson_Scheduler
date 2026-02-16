@@ -158,6 +158,67 @@ const store = {
       `;
       return toBooking(rows[0]);
     },
+
+    /**
+     * Atomically check for overlaps and insert all slots under a transaction with row lock.
+     * Prevents two concurrent requests from double-booking the same slot.
+     * @param {number} eventTypeId
+     * @param {{ start_time: string, end_time: string }[]} slots
+     * @param {{ first_name: string, last_name: string, email: string, phone?: string, recurring_group_id?: string }} guest
+     * @returns {{ created: object[] } | { conflict: true, conflictingStart: string }}
+     */
+    async createBatchIfNoConflict(eventTypeId, slots, guest) {
+      const client = await sql.connect();
+      try {
+        await client.sql`BEGIN`;
+        // Lock the event type row so concurrent bookings for this type serialize
+        const { rows: locked } = await client.sql`
+          SELECT id FROM event_types WHERE id = ${eventTypeId} FOR UPDATE
+        `;
+        if (locked.length === 0) {
+          await client.sql`ROLLBACK`;
+          return { conflict: true, conflictingStart: null };
+        }
+        for (const slot of slots) {
+          const start = slot.start_time.replace(' ', 'T').substring(0, 19);
+          const end = slot.end_time.replace(' ', 'T').substring(0, 19);
+          const { rows: overlapping } = await client.sql`
+            SELECT id FROM bookings
+            WHERE start_time < ${end}::timestamptz AND end_time > ${start}::timestamptz
+            LIMIT 1
+          `;
+          if (overlapping.length > 0) {
+            await client.sql`ROLLBACK`;
+            return { conflict: true, conflictingStart: slot.start_time };
+          }
+        }
+        const created = [];
+        for (const slot of slots) {
+          const { rows } = await client.sql`
+            INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
+            VALUES (
+              ${eventTypeId},
+              ${slot.start_time}::timestamptz,
+              ${slot.end_time}::timestamptz,
+              ${guest.first_name},
+              ${guest.last_name},
+              ${guest.email},
+              ${guest.phone || null},
+              ${guest.recurring_group_id || null}
+            )
+            RETURNING *
+          `;
+          created.push(toBooking(rows[0]));
+        }
+        await client.sql`COMMIT`;
+        return { created };
+      } catch (err) {
+        await client.sql`ROLLBACK`;
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
   },
 };
 
