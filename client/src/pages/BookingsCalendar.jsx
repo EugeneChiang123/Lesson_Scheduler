@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 
 const API = '/api';
 
@@ -96,11 +95,6 @@ export default function BookingsCalendar() {
 
   return (
     <div style={styles.page}>
-      <header style={styles.header}>
-        <Link to="/setup" style={styles.backLink}>← Back to events</Link>
-        <h1 style={styles.title}>Bookings</h1>
-      </header>
-
       <div style={styles.toolbar}>
         <div style={styles.nav}>
           <button type="button" style={styles.navBtn} onClick={goPrev} aria-label="Previous">‹</button>
@@ -281,16 +275,7 @@ const PRIMARY = '#0a7ea4';
 const MUTED = '#6b7280';
 
 const styles = {
-  page: {
-    minHeight: '100vh',
-    background: '#f9fafb',
-    maxWidth: 960,
-    margin: '0 auto',
-    padding: '24px 20px',
-  },
-  header: { marginBottom: 28 },
-  backLink: { color: PRIMARY, textDecoration: 'none', marginBottom: 10, display: 'inline-block', fontSize: 14 },
-  title: { margin: 0, fontSize: 24, fontWeight: 600, color: '#111' },
+  page: { maxWidth: 960 },
   toolbar: {
     display: 'flex',
     flexWrap: 'wrap',

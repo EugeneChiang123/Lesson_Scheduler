@@ -17,7 +17,9 @@ Calendly-style booking and instructor setup: shareable event links, calendar, sl
 
 ## Running with Postgres (optional)
 
-Set `POSTGRES_URL` or `DATABASE_URL` in your environment (e.g. `.env` locally or Vercel project env). Run the migration once: `npm run db:migrate-pg`. Optionally seed from existing JSON: `npm run db:seed-pg`. For setup details and rollout notes, see [ARCHITECTURE.md](ARCHITECTURE.md) § Persistence and [planning.md](planning.md) Part 2.
+**Step-by-step setup (Postgres on Vercel):** [docs/POSTGRES_SETUP.md](docs/POSTGRES_SETUP.md) — add Postgres via Vercel Marketplace (e.g. Neon), set `POSTGRES_URL`, run the migration, redeploy.
+
+Quick version: set `POSTGRES_URL` or `DATABASE_URL` in your environment (e.g. copy `.env.example` to `.env` and fill in the URL). Run the migration once: `npm run db:migrate-pg`. Optionally seed from existing JSON: `npm run db:seed-pg`. For architecture and rollout notes, see [ARCHITECTURE.md](ARCHITECTURE.md) § Persistence and [planning.md](planning.md) Part 2.
 
 ## Docs
 

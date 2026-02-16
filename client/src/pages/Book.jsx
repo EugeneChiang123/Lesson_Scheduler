@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { theme } from '../styles/theme';
+import { formatDuration } from '../utils/formatDuration';
 
 const API = '/api';
 
-const PRIMARY = '#0a7ea4';
-const BORDER = '#e5e7eb';
-const MUTED = '#6b7280';
+function getTimeZoneLabel() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: tz });
+    const region = tz.replace(/_/g, ' ');
+    return `${region} (${timeStr})`;
+  } catch {
+    return '';
+  }
+}
 
 function useMediaQuery(query) {
   const [match, setMatch] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : true));
@@ -117,17 +127,24 @@ export default function Book() {
   if (error) {
     return (
       <div style={styles.page}>
-        <div style={styles.errorTitle}>Error: {error}</div>
-        <div style={styles.errorDetail}>
-          Requested event type: <code>{eventTypeSlug}</code>
-        </div>
-        <div style={styles.errorHint}>
-          If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage.
+        <div style={styles.card}>
+          <div style={styles.errorTitle}>Error: {error}</div>
+          <div style={styles.errorDetail}>
+            Requested event type: <code>{eventTypeSlug}</code>
+          </div>
+          <div style={styles.errorHint}>
+            If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage. To fix this permanently: set <code>POSTGRES_URL</code> (or <code>DATABASE_URL</code>) in your deployment environment and run the database migration (<code>npm run db:migrate-pg</code>). See README or ARCHITECTURE.
+          </div>
         </div>
       </div>
     );
   }
   if (!eventType) return null;
+
+  const formatSlot = (s) => {
+    const d = new Date(s.replace(' ', 'T'));
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  };
 
   if (success) {
     const calendarUrl = buildAddToCalendarUrl(
@@ -137,23 +154,25 @@ export default function Book() {
     );
     return (
       <div style={styles.page}>
-        <div style={isDesktop ? styles.twoCol : styles.singleCol}>
-          <EventSummaryCard eventType={eventType} sticky={isDesktop} />
-          <div style={styles.stepCard}>
-            <div style={styles.successBlock}>
-              <div style={styles.successIcon}>✓</div>
-              <h2 style={styles.successTitle}>You're scheduled</h2>
-              <p style={styles.successText}>
-                Your booking has been confirmed. We'll see you then.
-              </p>
-              <a
-                href={calendarUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={styles.addToCalendar}
-              >
-                Add to calendar
-              </a>
+        <div style={styles.card}>
+          <div style={isDesktop ? styles.twoCol : styles.singleCol}>
+            <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+            <div style={styles.rightCol}>
+              <div style={styles.successBlock}>
+                <div style={styles.successIcon}>✓</div>
+                <h2 style={styles.successTitle}>You're scheduled</h2>
+                <p style={styles.successText}>
+                  Your booking has been confirmed. We'll see you then.
+                </p>
+                <a
+                  href={calendarUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={styles.addToCalendar}
+                >
+                  Add to calendar
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -161,44 +180,41 @@ export default function Book() {
     );
   }
 
-  const formatSlot = (s) => {
-    const d = new Date(s.replace(' ', 'T'));
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  };
-
   return (
     <div style={styles.page}>
-      <div style={isDesktop ? styles.twoCol : styles.singleCol}>
-        <EventSummaryCard eventType={eventType} sticky={isDesktop} />
-        <div style={styles.stepCard}>
-          {!selectedDate ? (
-            <CalendarStep
-              viewMonth={viewMonth}
-              setViewMonth={setViewMonth}
-              selectedDate={selectedDate}
-              setSelectedDate={setSelectedDate}
-            />
-          ) : !selectedSlot ? (
-            <SlotsStep
-              selectedDate={selectedDate}
-              setSelectedDate={setSelectedDate}
-              slots={slots}
-              slotsLoading={slotsLoading}
-              setSelectedSlot={setSelectedSlot}
-              formatSlot={formatSlot}
-            />
-          ) : (
-            <FormStep
-              selectedSlot={selectedSlot}
-              setSelectedSlot={setSelectedSlot}
-              formatSlot={formatSlot}
-              form={form}
-              setForm={setForm}
-              handleSubmit={handleSubmit}
-              submitting={submitting}
-              submitError={submitError}
-            />
-          )}
+      <div style={styles.card}>
+        <div style={isDesktop ? styles.twoCol : styles.singleCol}>
+          <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+          <div style={styles.rightCol}>
+            {!selectedDate ? (
+              <CalendarStep
+                viewMonth={viewMonth}
+                setViewMonth={setViewMonth}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+              />
+            ) : !selectedSlot ? (
+              <SlotsStep
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                slots={slots}
+                slotsLoading={slotsLoading}
+                setSelectedSlot={setSelectedSlot}
+                formatSlot={formatSlot}
+              />
+            ) : (
+              <FormStep
+                selectedSlot={selectedSlot}
+                setSelectedSlot={setSelectedSlot}
+                formatSlot={formatSlot}
+                form={form}
+                setForm={setForm}
+                handleSubmit={handleSubmit}
+                submitting={submitting}
+                submitError={submitError}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -209,10 +225,12 @@ function EventSummaryCard({ eventType, sticky = true }) {
   return (
     <div style={{ ...styles.summaryCard, ...(sticky ? styles.summaryCardSticky : {}) }}>
       <h1 style={styles.summaryName}>{eventType.name}</h1>
+      <p style={styles.summaryMeta}>
+        <span style={styles.metaIcon}>🕐</span> {formatDuration(eventType.durationMinutes)}
+      </p>
       {eventType.description && (
         <p style={styles.summaryDesc}>{eventType.description}</p>
       )}
-      <p style={styles.summaryMeta}>{eventType.durationMinutes} min</p>
       {eventType.allowRecurring && eventType.recurringCount > 1 && (
         <p style={styles.summaryRecurring}>
           You're booking {eventType.recurringCount} weekly sessions at this time.
@@ -243,9 +261,11 @@ function CalendarStep({ viewMonth, setViewMonth, selectedDate, setSelectedDate }
     selectedDate.getMonth() === d.getMonth() &&
     selectedDate.getDate() === d.getDate();
 
+  const timeZoneLabel = getTimeZoneLabel();
+
   return (
     <section style={styles.section}>
-      <h2 style={styles.sectionTitle}>Select a date</h2>
+      <h2 style={styles.sectionTitle}>Select a Date & Time</h2>
       <div style={styles.monthNav}>
         <button type="button" style={styles.monthNavBtn} onClick={prevMonth} aria-label="Previous month">
           ‹
@@ -256,7 +276,7 @@ function CalendarStep({ viewMonth, setViewMonth, selectedDate, setSelectedDate }
         </button>
       </div>
       <div style={styles.weekdayRow}>
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+        {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((d) => (
           <span key={d} style={styles.weekday}>{d}</span>
         ))}
       </div>
@@ -285,6 +305,12 @@ function CalendarStep({ viewMonth, setViewMonth, selectedDate, setSelectedDate }
           );
         })}
       </div>
+      {timeZoneLabel && (
+        <div style={styles.timeZoneRow}>
+          <span style={styles.timeZoneLabel}>Time zone</span>
+          <span style={styles.timeZoneValue}>🌐 {timeZoneLabel}</span>
+        </div>
+      )}
     </section>
   );
 }
@@ -411,8 +437,17 @@ function FormStep({
 const styles = {
   page: {
     minHeight: '100vh',
-    background: '#f9fafb',
+    background: theme.background,
     padding: '24px 16px',
+  },
+  card: {
+    background: theme.cardBg,
+    borderRadius: theme.borderRadiusLg,
+    boxShadow: theme.shadowCard,
+    border: `1px solid ${theme.border}`,
+    maxWidth: 960,
+    margin: '0 auto',
+    padding: 28,
   },
   errorTitle: {
     fontSize: 18,
@@ -422,52 +457,40 @@ const styles = {
   },
   errorDetail: {
     fontSize: 14,
-    color: MUTED,
+    color: theme.muted,
     marginBottom: 12,
   },
   errorHint: {
     fontSize: 13,
-    color: MUTED,
+    color: theme.muted,
     lineHeight: 1.5,
     maxWidth: 480,
   },
   twoCol: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(280px, 360px) 1fr',
-    gap: 48,
-    maxWidth: 920,
-    margin: '0 auto',
+    gridTemplateColumns: 'minmax(260px, 320px) 1fr',
+    gap: 40,
     alignItems: 'start',
   },
   singleCol: {
     display: 'flex',
     flexDirection: 'column',
     gap: 24,
-    maxWidth: 480,
-    margin: '0 auto',
   },
+  rightCol: { minWidth: 0 },
   summaryCard: {
-    background: '#fff',
-    borderRadius: 12,
-    padding: 28,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    border: `1px solid ${BORDER}`,
+    background: 'transparent',
+    padding: 0,
   },
   summaryCardSticky: { position: 'sticky', top: 24 },
-  summaryName: { margin: '0 0 10px', fontSize: 22, fontWeight: 600, color: '#111' },
-  summaryDesc: { color: MUTED, margin: '0 0 12px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
-  summaryMeta: { color: MUTED, fontSize: 14, margin: 0 },
-  summaryRecurring: { color: PRIMARY, fontSize: 14, margin: '12px 0 0' },
-  stepCard: {
-    background: '#fff',
-    borderRadius: 12,
-    padding: 28,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-    border: `1px solid ${BORDER}`,
-  },
+  summaryName: { margin: '0 0 12px', fontSize: 22, fontWeight: 600, color: theme.text },
+  summaryDesc: { color: theme.muted, margin: '0 0 12px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
+  summaryMeta: { color: theme.muted, fontSize: 14, margin: 0, display: 'flex', alignItems: 'center', gap: 6 },
+  metaIcon: { fontSize: 16 },
+  summaryRecurring: { color: theme.primary, fontSize: 14, margin: '12px 0 0' },
   section: { margin: 0 },
-  sectionTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 4px', color: '#111' },
-  sectionSub: { fontSize: 14, color: MUTED, margin: '0 0 16px' },
+  sectionTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 16px', color: theme.text },
+  sectionSub: { fontSize: 14, color: theme.muted, margin: '0 0 16px' },
   monthNav: {
     display: 'flex',
     alignItems: 'center',
@@ -480,74 +503,77 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: `1px solid ${BORDER}`,
-    borderRadius: 8,
-    background: '#fff',
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+    background: theme.cardBg,
     cursor: 'pointer',
     fontSize: 20,
-    color: '#374151',
+    color: theme.text,
   },
-  monthNavTitle: { fontSize: 16, fontWeight: 600, color: '#111' },
+  monthNavTitle: { fontSize: 16, fontWeight: 600, color: theme.text },
   weekdayRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(7, 1fr)',
     gap: 4,
     marginBottom: 8,
   },
-  weekday: { fontSize: 11, color: MUTED, textAlign: 'center', fontWeight: 500 },
+  weekday: { fontSize: 11, color: theme.muted, textAlign: 'center', fontWeight: 600 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 },
   empty: {},
   day: {
     aspectRatio: 1,
-    border: `1px solid ${BORDER}`,
-    borderRadius: 8,
-    background: '#fff',
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+    background: theme.cardBg,
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 500,
-    color: '#111',
+    color: theme.text,
   },
-  dayPast: { opacity: 0.4, cursor: 'not-allowed', background: '#f9fafb' },
-  daySelected: { background: PRIMARY, color: '#fff', borderColor: PRIMARY },
+  dayPast: { opacity: 0.4, cursor: 'not-allowed', background: theme.background },
+  daySelected: { background: theme.primary, color: '#fff', borderColor: theme.primary },
+  timeZoneRow: { marginTop: 20, paddingTop: 16, borderTop: `1px solid ${theme.border}` },
+  timeZoneLabel: { display: 'block', fontSize: 12, fontWeight: 500, color: theme.muted, marginBottom: 4 },
+  timeZoneValue: { fontSize: 14, color: theme.text },
   back: {
     background: 'none',
     border: 'none',
-    color: PRIMARY,
+    color: theme.primary,
     cursor: 'pointer',
     marginBottom: 16,
     padding: 0,
     fontSize: 14,
   },
-  muted: { color: MUTED, fontSize: 14 },
-  noSlots: { color: MUTED, fontSize: 14 },
+  muted: { color: theme.muted, fontSize: 14 },
+  noSlots: { color: theme.muted, fontSize: 14 },
   slotList: { display: 'flex', flexWrap: 'wrap', gap: 10 },
   slotChip: {
     padding: '10px 18px',
-    border: `1px solid ${BORDER}`,
-    borderRadius: 8,
-    background: '#fff',
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+    background: theme.cardBg,
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 500,
-    color: '#111',
+    color: theme.text,
   },
-  selectedTime: { fontWeight: 600, fontSize: 16, margin: '0 0 20px', color: '#111' },
+  selectedTime: { fontWeight: 600, fontSize: 16, margin: '0 0 20px', color: theme.text },
   form: { display: 'flex', flexDirection: 'column', gap: 18 },
   label: { display: 'flex', flexDirection: 'column', gap: 6 },
-  labelText: { fontSize: 14, fontWeight: 500, color: '#374151' },
+  labelText: { fontSize: 14, fontWeight: 500, color: theme.text },
   input: {
     padding: '10px 12px',
-    border: `1px solid ${BORDER}`,
-    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
     fontSize: 15,
   },
   submitError: { color: '#dc2626', fontSize: 14, margin: 0 },
   submit: {
     padding: 14,
-    background: PRIMARY,
+    background: theme.primary,
     color: '#fff',
     border: 'none',
-    borderRadius: 8,
+    borderRadius: theme.borderRadius,
     cursor: 'pointer',
     fontWeight: 600,
     fontSize: 15,
@@ -567,11 +593,11 @@ const styles = {
     margin: '0 auto 16px',
     fontWeight: 600,
   },
-  successTitle: { margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: '#111' },
-  successText: { color: MUTED, margin: '0 0 20px', fontSize: 15 },
+  successTitle: { margin: '0 0 8px', fontSize: 22, fontWeight: 600, color: theme.text },
+  successText: { color: theme.muted, margin: '0 0 20px', fontSize: 15 },
   addToCalendar: {
     display: 'inline-block',
-    color: PRIMARY,
+    color: theme.primary,
     fontWeight: 600,
     fontSize: 14,
     textDecoration: 'none',

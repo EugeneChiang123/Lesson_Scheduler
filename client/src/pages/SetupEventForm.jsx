@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import { theme } from '../styles/theme';
 
 const API = '/api';
 const DAYS = [{ id: 0, label: 'Sun' }, { id: 1, label: 'Mon' }, { id: 2, label: 'Tue' }, { id: 3, label: 'Wed' }, { id: 4, label: 'Thu' }, { id: 5, label: 'Fri' }, { id: 6, label: 'Sat' }];
@@ -77,10 +78,7 @@ export default function SetupEventForm() {
 
   return (
     <div style={styles.page}>
-      <header style={styles.header}>
-        <Link to="/setup" style={styles.backLink}>← Back to events</Link>
-        <h1 style={styles.title}>{isEdit ? 'Edit event type' : 'New event type'}</h1>
-      </header>
+      <h1 style={styles.title}>{isEdit ? 'Edit event type' : 'New event type'}</h1>
 
       <section style={styles.card}>
         <div style={styles.field}>
@@ -189,23 +187,47 @@ export default function SetupEventForm() {
 }
 
 const styles = {
-  page: { maxWidth: 640, margin: '0 auto', padding: 24 },
-  header: { marginBottom: 24 },
-  backLink: { color: '#0a7ea4', textDecoration: 'none', marginBottom: 8, display: 'inline-block' },
-  title: { margin: 0, fontSize: 24 },
-  card: { background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
+  page: { maxWidth: 640 },
+  title: { margin: '0 0 24px', fontSize: 22, fontWeight: 600, color: theme.text },
+  card: {
+    background: theme.cardBg,
+    borderRadius: theme.borderRadiusLg,
+    padding: 24,
+    boxShadow: theme.shadowCard,
+    border: `1px solid ${theme.border}`,
+  },
   field: { marginBottom: 16 },
   label: { display: 'block', marginBottom: 4, fontSize: 14 },
-  input: { width: '100%', padding: 10, border: '1px solid #ccc', borderRadius: 8 },
+  input: {
+    width: '100%',
+    padding: 10,
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+  },
   checkLabel: { display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' },
-  urlPreview: { fontSize: 12, color: '#666', marginTop: 4 },
-  hint: { color: '#666', fontSize: 14, marginTop: 4 },
+  urlPreview: { fontSize: 12, color: theme.muted, marginTop: 4 },
+  hint: { color: theme.muted, fontSize: 14, marginTop: 4 },
   dayRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
   dayLabel: { width: 36 },
   windowRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
-  timeInput: { padding: 6, border: '1px solid #ccc', borderRadius: 6 },
-  smallBtn: { padding: '4px 8px', fontSize: 12, background: '#f0f0f0', border: 'none', borderRadius: 6, cursor: 'pointer' },
+  timeInput: { padding: 6, border: `1px solid ${theme.border}`, borderRadius: theme.borderRadius },
+  smallBtn: {
+    padding: '4px 8px',
+    fontSize: 12,
+    background: '#f3f4f6',
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+    cursor: 'pointer',
+  },
   actions: { display: 'flex', gap: 12, marginTop: 16, alignItems: 'center' },
-  primaryBtn: { padding: '10px 20px', background: '#0a7ea4', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
-  cancelLink: { color: '#666', textDecoration: 'none' },
+  primaryBtn: {
+    padding: '10px 20px',
+    background: theme.primary,
+    color: '#fff',
+    border: 'none',
+    borderRadius: theme.borderRadius,
+    cursor: 'pointer',
+    fontWeight: 600,
+  },
+  cancelLink: { color: theme.muted, textDecoration: 'none' },
 };
