@@ -120,14 +120,14 @@ async function run() {
       passed++;
     }
 
-    // 5. Create booking
+    // 5. Create booking (API requires non-empty phone)
     const bookRes = await request('POST', '/api/bookings', {
       eventTypeSlug: SLUG,
       startTime: slotTime,
       firstName: 'Workflow',
       lastName: 'Tester',
       email: 'workflow@test.local',
-      phone: '',
+      phone: '+15550000000',
     });
     if (bookRes.status !== 201 || !bookRes.body?.success) {
       console.error('FAIL: Create booking', bookRes.status, bookRes.body);
