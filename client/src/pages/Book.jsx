@@ -1,14 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { theme } from '../styles/theme';
+import { formatDuration } from '../utils/formatDuration';
 
 const API = '/api';
-
-function formatDuration(minutes) {
-  const m = minutes ?? 30;
-  if (m >= 60) return `${m / 60} hr`;
-  return `${m} min`;
-}
 
 function getTimeZoneLabel() {
   try {
