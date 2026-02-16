@@ -3,6 +3,7 @@
  * Requires POSTGRES_URL or DATABASE_URL. Run after db:migrate-pg.
  * Usage: npm run db:seed-pg
  */
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');

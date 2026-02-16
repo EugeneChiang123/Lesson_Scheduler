@@ -133,7 +133,7 @@ export default function Book() {
             Requested event type: <code>{eventTypeSlug}</code>
           </div>
           <div style={styles.errorHint}>
-            If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage.
+            If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage. To fix this permanently: set <code>POSTGRES_URL</code> (or <code>DATABASE_URL</code>) in your deployment environment and run the database migration (<code>npm run db:migrate-pg</code>). See README or ARCHITECTURE.
           </div>
         </div>
       </div>
