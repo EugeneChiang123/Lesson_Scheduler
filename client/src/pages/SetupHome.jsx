@@ -6,8 +6,9 @@ import { formatAvailability } from '../utils/formatAvailability';
 const API = '/api';
 
 function formatDuration(minutes) {
-  if (minutes >= 60) return `${minutes / 60} hr.`;
-  return `${minutes} min.`;
+  const m = minutes ?? 30;
+  if (m >= 60) return `${m / 60} hr`;
+  return `${m} min`;
 }
 
 export default function SetupHome() {
