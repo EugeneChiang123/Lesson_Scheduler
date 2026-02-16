@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Landing from './pages/Landing';
 import Book from './pages/Book';
 import InstructorLayout from './components/InstructorLayout';
 import SetupHome from './pages/SetupHome';
@@ -9,7 +8,7 @@ import BookingsCalendar from './pages/BookingsCalendar';
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<Navigate to="/setup" replace />} />
       <Route path="/book/:eventTypeSlug" element={<Book />} />
       <Route path="/setup" element={<InstructorLayout />}>
         <Route index element={<SetupHome />} />

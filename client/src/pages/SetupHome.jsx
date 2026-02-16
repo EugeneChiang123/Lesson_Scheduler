@@ -67,9 +67,6 @@ export default function SetupHome() {
 
       <div style={styles.context}>
         <span style={styles.contextLabel}>Your event types</span>
-        <Link to="/" style={styles.landingLink} target="_blank" rel="noopener noreferrer">
-          View landing page ↗
-        </Link>
       </div>
 
       {loading ? (
@@ -111,6 +108,14 @@ export default function SetupHome() {
                 )}
               </div>
               <div style={styles.cardActions}>
+                <button
+                  type="button"
+                  style={styles.previewBtn}
+                  onClick={() => window.open(`${baseUrl}/book/${et.slug}`, '_blank')}
+                  title="Open booking page"
+                >
+                  Open
+                </button>
                 <button
                   type="button"
                   style={styles.copyBtn}
@@ -187,11 +192,6 @@ const styles = {
     marginBottom: 20,
   },
   contextLabel: { fontSize: 14, fontWeight: 500, color: theme.text },
-  landingLink: {
-    fontSize: 14,
-    color: theme.primary,
-    textDecoration: 'none',
-  },
   loading: { color: theme.muted },
   card: {
     background: theme.cardBg,
@@ -240,6 +240,15 @@ const styles = {
     marginTop: 6,
   },
   cardActions: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  previewBtn: {
+    padding: '6px 12px',
+    background: '#f3f4f6',
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.borderRadius,
+    cursor: 'pointer',
+    fontSize: 14,
+    color: theme.primary,
+  },
   copyBtn: {
     padding: '6px 12px',
     background: '#f3f4f6',
