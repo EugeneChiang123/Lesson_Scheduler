@@ -55,7 +55,6 @@ export default function Book() {
   const [eventType, setEventType] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [errorDebug, setErrorDebug] = useState(null);
   const [viewMonth, setViewMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -70,13 +69,11 @@ export default function Book() {
   const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
-    setErrorDebug(null);
     fetch(`${API}/event-types/${eventTypeSlug}`)
       .then(async (r) => {
         if (r.ok) return r.json();
         const body = await r.json().catch(() => ({}));
         const msg = body.error || `Request failed (${r.status})`;
-        setErrorDebug(body.debug || null);
         throw new Error(msg);
       })
       .then(setEventType)
@@ -135,11 +132,6 @@ export default function Book() {
           <div style={styles.errorDetail}>
             Requested event type: <code>{eventTypeSlug}</code>
           </div>
-          {errorDebug && (
-            <div style={{ ...styles.errorDetail, marginTop: 8, fontFamily: 'monospace', fontSize: 12 }}>
-              Debug (from server): <code>{JSON.stringify(errorDebug)}</code>
-            </div>
-          )}
           <div style={styles.errorHint}>
             If you just created this event and opened the link in a new window or later, the booking link may not see it yet on serverless deployments (data is not shared between requests). Try using the same browser session or use a deployment with persistent storage. To fix this permanently: set <code>POSTGRES_URL</code> (or <code>DATABASE_URL</code>) in your deployment environment and run the database migration (<code>npm run db:migrate-pg</code>). See README or ARCHITECTURE.
           </div>

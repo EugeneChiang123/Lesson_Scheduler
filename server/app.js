@@ -28,4 +28,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   });
 }
 
+// On Vercel, this app receives every request; serve SPA for non-API routes
+if (process.env.VERCEL) {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  });
+}
+
 module.exports = app;

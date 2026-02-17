@@ -26,21 +26,9 @@ router.get('/id/:id', async (req, res) => {
 
 // GET /api/event-types/:slug - public details for booking page
 router.get('/:slug', async (req, res) => {
-  const slug = req.params.slug;
-  const pathInfo = req.path || req.url || 'unknown';
-  const storeType = process.env.POSTGRES_URL || process.env.DATABASE_URL ? 'postgres' : 'file';
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'eventTypes.js:GET/:slug',message:'getBySlug called',data:{slug,path:pathInfo,storeType},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
-    const row = await store.eventTypes.getBySlug(slug);
-    if (!row) {
-      const debug = { store: storeType, slug, path: pathInfo };
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'eventTypes.js:GET/:slug',message:'404 event type not found',data:debug,timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
-      return res.status(404).json({ error: 'Event type not found', debug });
-    }
+    const row = await store.eventTypes.getBySlug(req.params.slug);
+    if (!row) return res.status(404).json({ error: 'Event type not found' });
     res.json(row);
   } catch (err) {
     res.status(500).json({ error: err.message });
