@@ -188,25 +188,6 @@ const store = {
       );
       return toBooking(rows[0]);
     },
-    async update(id, data) {
-      const existing = await store.bookings.getById(id);
-      if (!existing) return null;
-      const first_name = data.first_name !== undefined ? data.first_name : existing.first_name;
-      const last_name = data.last_name !== undefined ? data.last_name : existing.last_name;
-      const email = data.email !== undefined ? data.email : existing.email;
-      const phone = data.phone !== undefined ? data.phone : existing.phone;
-      const start_time = data.start_time !== undefined ? data.start_time : existing.start_time;
-      const end_time = data.end_time !== undefined ? data.end_time : existing.end_time;
-      const notes = data.notes !== undefined ? data.notes : existing.notes;
-      const duration_minutes = data.duration_minutes !== undefined ? data.duration_minutes : existing.duration_minutes;
-      await pool.query(
-        `UPDATE bookings
-         SET first_name = $1, last_name = $2, email = $3, phone = $4, start_time = $5::timestamptz, end_time = $6::timestamptz, notes = $7, duration_minutes = $8
-         WHERE id = $9`,
-        [first_name, last_name, email, phone || null, start_time, end_time, notes || '', duration_minutes, Number(id)]
-      );
-      return store.bookings.getById(id);
-    },
     /**
      * Atomically check for overlaps then update (in a transaction with advisory lock).
      * Prevents double-booking when a concurrent POST or PATCH could insert/move into the same slot.

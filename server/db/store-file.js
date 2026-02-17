@@ -200,26 +200,6 @@ const store = {
       writeBookings(list);
       return Promise.resolve(normalizeBooking(row));
     },
-    update(id, data) {
-      const list = readBookings();
-      const idx = list.findIndex((b) => b.id === Number(id));
-      if (idx === -1) return Promise.resolve(null);
-      const row = list[idx];
-      const updated = {
-        ...row,
-        first_name: data.first_name !== undefined ? data.first_name : row.first_name,
-        last_name: data.last_name !== undefined ? data.last_name : row.last_name,
-        email: data.email !== undefined ? data.email : row.email,
-        phone: data.phone !== undefined ? data.phone : row.phone,
-        start_time: data.start_time !== undefined ? data.start_time : row.start_time,
-        end_time: data.end_time !== undefined ? data.end_time : row.end_time,
-        notes: data.notes !== undefined ? data.notes : (row.notes ?? ''),
-        duration_minutes: data.duration_minutes !== undefined ? data.duration_minutes : (row.duration_minutes != null ? row.duration_minutes : deriveDurationMinutes(row.start_time, row.end_time)),
-      };
-      list[idx] = updated;
-      writeBookings(list);
-      return Promise.resolve(normalizeBooking(updated));
-    },
     /**
      * Atomically check for overlaps then update (under global mutex). Prevents double-booking
      * when a concurrent POST or PATCH could insert/move into the same slot.
