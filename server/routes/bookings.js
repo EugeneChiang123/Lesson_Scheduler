@@ -78,19 +78,21 @@ router.patch('/:id', async (req, res) => {
     }
     const existingDuration = existing.duration_minutes != null ? existing.duration_minutes : 30;
 
+    let duration_minutes = existing.duration_minutes != null ? existing.duration_minutes : existingDuration;
+    if (durationMinutes !== undefined) {
+      duration_minutes = Math.max(1, Number(durationMinutes));
+    }
+
     let end_time = existing.end_time;
     if (endTime !== undefined) {
       end_time = endTime.replace(' ', 'T').substring(0, 19).replace('T', ' ');
     } else if (durationMinutes !== undefined) {
-      end_time = addMinutes(start_time, durationMinutes);
+      end_time = addMinutes(start_time, duration_minutes);
     } else if (start_time !== existing.start_time) {
       end_time = addMinutes(start_time, existingDuration);
     }
 
-    let duration_minutes = existing.duration_minutes != null ? existing.duration_minutes : existingDuration;
-    if (durationMinutes !== undefined) {
-      duration_minutes = Math.max(1, Number(durationMinutes));
-    } else if (start_time !== existing.start_time || end_time !== existing.end_time) {
+    if (durationMinutes === undefined && (start_time !== existing.start_time || end_time !== existing.end_time)) {
       const computed = Math.round((new Date(end_time.replace(' ', 'T')) - new Date(start_time.replace(' ', 'T'))) / 60000);
       duration_minutes = Math.max(1, computed) || existingDuration;
     }
