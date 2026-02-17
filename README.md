@@ -21,7 +21,11 @@ Calendly-style booking and instructor setup: shareable event links, calendar, sl
 
 Quick version: set `POSTGRES_URL` or `DATABASE_URL` in your environment (e.g. copy `.env.example` to `.env` and fill in the URL). Run the migration once: `npm run db:migrate-pg`. Optionally seed from existing JSON: `npm run db:seed-pg`. For architecture and rollout notes, see [ARCHITECTURE.md](ARCHITECTURE.md) § Persistence and [planning.md](planning.md) Part 2.
 
-## Docs
+## Documentation
 
-- **Architecture and design:** [ARCHITECTURE.md](ARCHITECTURE.md) — stack, data model, API, flows, persistence, project layout.
+- **Architecture and design:** [ARCHITECTURE.md](ARCHITECTURE.md) — stack, data model, API summary, flows, persistence, project layout.
+- **Project structure:** [docs/FILES.md](docs/FILES.md) — what each file does and where it fits.
+- **API reference:** [docs/API.md](docs/API.md) — every endpoint, request/response shapes, and errors.
+- **Interactions:** [docs/INTERACTIONS.md](docs/INTERACTIONS.md) — route-to-page map, page-to-API map, and flow diagrams.
+- **Postgres on Vercel:** [docs/POSTGRES_SETUP.md](docs/POSTGRES_SETUP.md) — step-by-step setup with Neon or other Postgres.
 - **Plans and history:** [planning.md](planning.md) — product vision, implementation order, Postgres rollout, risk and rollback.
