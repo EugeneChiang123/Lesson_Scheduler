@@ -1,9 +1,13 @@
 /**
  * Postgres-backed data store. Same API as store (file-backed).
- * Used when POSTGRES_URL (or DATABASE_URL) is set.
+ * Used when POSTGRES_URL or DATABASE_URL is set.
+ * Uses pg with the same URL so Neon (DATABASE_URL only) works without duplicating env.
  * All methods return Promises.
  */
-const { sql } = require('@vercel/postgres');
+const { Pool } = require('pg');
+
+const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
 
 const MAX_RECURRING_COUNT = 52;
 
@@ -56,15 +60,15 @@ const store = {
   clampRecurringCount,
   eventTypes: {
     async all() {
-      const { rows } = await sql`SELECT * FROM event_types ORDER BY id`;
+      const { rows } = await pool.query('SELECT * FROM event_types ORDER BY id');
       return rows.map(toEventType);
     },
     async getById(id) {
-      const { rows } = await sql`SELECT * FROM event_types WHERE id = ${Number(id)}`;
+      const { rows } = await pool.query('SELECT * FROM event_types WHERE id = $1', [Number(id)]);
       return toEventType(rows[0] || null);
     },
     async getBySlug(slug) {
-      const { rows } = await sql`SELECT * FROM event_types WHERE slug = ${slug}`;
+      const { rows } = await pool.query('SELECT * FROM event_types WHERE slug = $1', [slug]);
       return toEventType(rows[0] || null);
     },
     async create(data) {
@@ -72,20 +76,21 @@ const store = {
       if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationMinutes must be a positive number');
       const recurringCount = clampRecurringCount(data.recurringCount ?? 1);
       const availability = Array.isArray(data.availability) ? data.availability : [];
-      const { rows: existing } = await sql`SELECT id FROM event_types WHERE slug = ${data.slug}`;
+      const { rows: existing } = await pool.query('SELECT id FROM event_types WHERE slug = $1', [data.slug]);
       if (existing.length > 0) throw new Error('Slug already exists');
-      const { rows } = await sql`
-        INSERT INTO event_types (slug, name, description, duration_minutes, allow_recurring, recurring_count, availability)
-        VALUES (${data.slug}, ${data.name || ''}, ${data.description || ''}, ${duration}, ${Boolean(data.allowRecurring)}, ${recurringCount}, ${JSON.stringify(availability)}::jsonb)
-        RETURNING *
-      `;
+      const { rows } = await pool.query(
+        `INSERT INTO event_types (slug, name, description, duration_minutes, allow_recurring, recurring_count, availability)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         RETURNING *`,
+        [data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability)]
+      );
       return toEventType(rows[0]);
     },
     async update(id, data) {
       const existing = await store.eventTypes.getById(id);
       if (!existing) return null;
       if (data.slug !== undefined) {
-        const { rows: conflict } = await sql`SELECT id FROM event_types WHERE slug = ${data.slug} AND id != ${Number(id)}`;
+        const { rows: conflict } = await pool.query('SELECT id FROM event_types WHERE slug = $1 AND id != $2', [data.slug, Number(id)]);
         if (conflict.length > 0) throw new Error('Slug already exists');
       }
       const nextDuration = data.durationMinutes !== undefined ? data.durationMinutes : existing.durationMinutes;
@@ -97,65 +102,64 @@ const store = {
       const allowRecurring = data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : existing.allowRecurring;
       const recurringCount = data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(existing.recurringCount);
       const availability = data.availability !== undefined ? data.availability : existing.availability;
-      const { rows } = await sql`
-        UPDATE event_types
-        SET slug = ${slug}, name = ${name}, description = ${description}, duration_minutes = ${durationMinutes},
-            allow_recurring = ${allowRecurring}, recurring_count = ${recurringCount}, availability = ${JSON.stringify(availability)}::jsonb
-        WHERE id = ${Number(id)}
-        RETURNING *
-      `;
+      const { rows } = await pool.query(
+        `UPDATE event_types
+         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb
+         WHERE id = $8
+         RETURNING *`,
+        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), Number(id)]
+      );
       return toEventType(rows[0]);
     },
   },
   bookings: {
     async list() {
-      const { rows } = await sql`SELECT * FROM bookings ORDER BY start_time`;
+      const { rows } = await pool.query('SELECT * FROM bookings ORDER BY start_time');
       return rows.map(toBooking);
     },
     async getByEventTypeAndDate(eventTypeId, dateStr) {
       const prefix = dateStr.replace('T', ' ').substring(0, 10);
-      const { rows } = await sql`
-        SELECT * FROM bookings
-        WHERE event_type_id = ${Number(eventTypeId)}
-          AND (start_time::text LIKE ${prefix + '%'})
-        ORDER BY start_time
-      `;
+      const { rows } = await pool.query(
+        `SELECT * FROM bookings
+         WHERE event_type_id = $1 AND (start_time::text LIKE $2)
+         ORDER BY start_time`,
+        [Number(eventTypeId), prefix + '%']
+      );
       return rows.map(toBooking);
     },
     async getBookingsOnDate(dateStr) {
       const prefix = dateStr.replace('T', ' ').substring(0, 10);
-      const { rows } = await sql`
-        SELECT * FROM bookings
-        WHERE start_time::text LIKE ${prefix + '%'}
-        ORDER BY start_time
-      `;
+      const { rows } = await pool.query(
+        `SELECT * FROM bookings WHERE start_time::text LIKE $1 ORDER BY start_time`,
+        [prefix + '%']
+      );
       return rows.map(toBooking);
     },
     async findOverlapping(startTime, endTime) {
       const start = startTime.replace(' ', 'T').substring(0, 19);
       const end = endTime.replace(' ', 'T').substring(0, 19);
-      const { rows } = await sql`
-        SELECT * FROM bookings
-        WHERE start_time < ${end}::timestamptz AND end_time > ${start}::timestamptz
-        LIMIT 1
-      `;
+      const { rows } = await pool.query(
+        'SELECT * FROM bookings WHERE start_time < $1::timestamptz AND end_time > $2::timestamptz LIMIT 1',
+        [end, start]
+      );
       return rows[0] ? toBooking(rows[0]) : null;
     },
     async insert(record) {
-      const { rows } = await sql`
-        INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
-        VALUES (
-          ${record.event_type_id},
-          ${record.start_time}::timestamptz,
-          ${record.end_time}::timestamptz,
-          ${record.first_name},
-          ${record.last_name},
-          ${record.email},
-          ${record.phone || null},
-          ${record.recurring_group_id || null}
-        )
-        RETURNING *
-      `;
+      const { rows } = await pool.query(
+        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
+         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          record.event_type_id,
+          record.start_time,
+          record.end_time,
+          record.first_name,
+          record.last_name,
+          record.email,
+          record.phone || null,
+          record.recurring_group_id || null,
+        ]
+      );
       return toBooking(rows[0]);
     },
 
@@ -168,52 +172,49 @@ const store = {
      * @returns {{ created: object[] } | { conflict: true, conflictingStart: string }}
      */
     async createBatchIfNoConflict(eventTypeId, slots, guest) {
-      const client = await sql.connect();
+      const client = await pool.connect();
       try {
-        await client.sql`BEGIN`;
-        // Lock the event type row so concurrent bookings for this type serialize
-        const { rows: locked } = await client.sql`
-          SELECT id FROM event_types WHERE id = ${eventTypeId} FOR UPDATE
-        `;
+        await client.query('BEGIN');
+        const { rows: locked } = await client.query('SELECT id FROM event_types WHERE id = $1 FOR UPDATE', [eventTypeId]);
         if (locked.length === 0) {
-          await client.sql`ROLLBACK`;
+          await client.query('ROLLBACK');
           return { conflict: true, conflictingStart: null };
         }
         for (const slot of slots) {
           const start = slot.start_time.replace(' ', 'T').substring(0, 19);
           const end = slot.end_time.replace(' ', 'T').substring(0, 19);
-          const { rows: overlapping } = await client.sql`
-            SELECT id FROM bookings
-            WHERE start_time < ${end}::timestamptz AND end_time > ${start}::timestamptz
-            LIMIT 1
-          `;
+          const { rows: overlapping } = await client.query(
+            'SELECT id FROM bookings WHERE start_time < $1::timestamptz AND end_time > $2::timestamptz LIMIT 1',
+            [end, start]
+          );
           if (overlapping.length > 0) {
-            await client.sql`ROLLBACK`;
+            await client.query('ROLLBACK');
             return { conflict: true, conflictingStart: slot.start_time };
           }
         }
         const created = [];
         for (const slot of slots) {
-          const { rows } = await client.sql`
-            INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
-            VALUES (
-              ${eventTypeId},
-              ${slot.start_time}::timestamptz,
-              ${slot.end_time}::timestamptz,
-              ${guest.first_name},
-              ${guest.last_name},
-              ${guest.email},
-              ${guest.phone || null},
-              ${guest.recurring_group_id || null}
-            )
-            RETURNING *
-          `;
+          const { rows } = await client.query(
+            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
+             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8)
+             RETURNING *`,
+            [
+              eventTypeId,
+              slot.start_time,
+              slot.end_time,
+              guest.first_name,
+              guest.last_name,
+              guest.email,
+              guest.phone || null,
+              guest.recurring_group_id || null,
+            ]
+          );
           created.push(toBooking(rows[0]));
         }
-        await client.sql`COMMIT`;
+        await client.query('COMMIT');
         return { created };
       } catch (err) {
-        await client.sql`ROLLBACK`;
+        await client.query('ROLLBACK');
         throw err;
       } finally {
         client.release();
