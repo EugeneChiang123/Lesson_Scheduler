@@ -104,20 +104,15 @@ export default function SetupHome() {
                 )}
               </div>
               <div style={styles.cardActions}>
-                <button
-                  type="button"
-                  style={styles.previewBtn}
-                  onClick={() => {
-                    // #region agent log
-                    const url = `${baseUrl}/book/${et.slug}`;
-                    const w = window.open(url, '_blank');
-                    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SetupHome.jsx:Open click',message:'Open button clicked',data:{baseUrl,slug:et.slug,url,windowOpenReturned:!!w},timestamp:Date.now(),hypothesisId:'A_B_D'})}).catch(()=>{});
-                    // #endregion
-                  }}
+                <a
+                  href={`${baseUrl}/book/${et.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ ...styles.previewBtn, textDecoration: 'none' }}
                   title="Open booking page"
                 >
                   Open
-                </button>
+                </a>
                 <button
                   type="button"
                   style={styles.copyBtn}
