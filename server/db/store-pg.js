@@ -167,15 +167,6 @@ const store = {
       );
       return rows[0] ? toBooking(rows[0]) : null;
     },
-    async findOverlappingExcluding(bookingId, startTime, endTime) {
-      const start = startTime.replace(' ', 'T').substring(0, 19);
-      const end = endTime.replace(' ', 'T').substring(0, 19);
-      const { rows } = await pool.query(
-        'SELECT * FROM bookings WHERE id != $1 AND start_time < $2::timestamptz AND end_time > $3::timestamptz LIMIT 1',
-        [Number(bookingId), end, start]
-      );
-      return rows[0] ? toBooking(rows[0]) : null;
-    },
     async insert(record) {
       const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
       const { rows } = await pool.query(

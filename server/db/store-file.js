@@ -192,18 +192,6 @@ const store = {
       });
       return Promise.resolve(found || null);
     },
-    findOverlappingExcluding(bookingId, startTime, endTime) {
-      const list = readBookings();
-      const start = startTime.replace(' ', 'T');
-      const end = endTime.replace(' ', 'T');
-      const found = list.find((b) => {
-        if (b.id === Number(bookingId)) return false;
-        const bStart = b.start_time.replace(' ', 'T');
-        const bEnd = b.end_time.replace(' ', 'T');
-        return start < bEnd && end > bStart;
-      });
-      return Promise.resolve(found ? normalizeBooking(found) : null);
-    },
     insert(record) {
       const list = readBookings();
       const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
