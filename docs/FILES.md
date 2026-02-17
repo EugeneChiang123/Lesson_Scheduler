@@ -46,7 +46,7 @@ One-place reference for what each important file does and how it fits in. For da
 | **client/src/pages/SetupEventForm.jsx** | Create or edit event type: loads one by id when editing (GET /api/event-types/id/:id), submits POST or PATCH to event-types (includes location), then navigates back to /setup. |
 | **client/src/pages/Book.jsx** | Public booking page: loads event type by slug, month calendar, fetches slots for selected date, form (name, email, phone), POST /api/bookings, success with optional add-to-calendar link. |
 | **client/src/pages/BookingsCalendar.jsx** | Instructor calendar: lists all bookings (GET /api/bookings), month/week/day views, hover popover with student info, click event → EventEditPage. |
-| **client/src/pages/EventEditPage.jsx** | Edit one booking: GET /api/bookings/:id, form (date, time, name, email, phone, notes), PATCH to save, DELETE to remove; redirects to /setup/bookings. |
+| **client/src/pages/EventEditPage.jsx** | Edit one booking: GET /api/bookings/:id, form (date, time, duration, name, email, phone, notes), PATCH to save (overlap check; 409 if would clash), DELETE to remove; redirects to /setup/bookings. |
 | **client/src/utils/formatDuration.js** | Formats duration in minutes for display (e.g. “30 min”). |
 | **client/src/utils/formatAvailability.js** | Formats event type availability array for display (e.g. “Mon 9:00 AM – 5:00 PM”). |
 | **client/src/styles/theme.js** | Shared theme tokens (colors, spacing, border radius) used by layout and pages. |

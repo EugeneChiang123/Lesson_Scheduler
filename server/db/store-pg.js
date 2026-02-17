@@ -41,20 +41,32 @@ function toEventType(row) {
   };
 }
 
+/** Derive duration in minutes from start/end when not stored */
+function deriveDurationMinutes(startTime, endTime) {
+  if (startTime == null || endTime == null) return 30;
+  const start = startTime instanceof Date ? startTime : new Date(startTime);
+  const end = endTime instanceof Date ? endTime : new Date(endTime);
+  return Math.round((end - start) / 60000) || 30;
+}
+
 /** Map DB row to app booking (snake_case, formatted times) */
 function toBooking(row) {
   if (!row) return null;
+  const start_time = formatTs(row.start_time);
+  const end_time = formatTs(row.end_time);
+  const duration_minutes = row.duration_minutes != null ? row.duration_minutes : deriveDurationMinutes(row.start_time, row.end_time);
   return {
     id: row.id,
     event_type_id: row.event_type_id,
-    start_time: formatTs(row.start_time),
-    end_time: formatTs(row.end_time),
+    start_time,
+    end_time,
     first_name: row.first_name,
     last_name: row.last_name,
     email: row.email,
     phone: row.phone || null,
     recurring_group_id: row.recurring_group_id || null,
     notes: row.notes || '',
+    duration_minutes,
   };
 }
 
@@ -162,9 +174,10 @@ const store = {
       return rows[0] ? toBooking(rows[0]) : null;
     },
     async insert(record) {
+      const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
       const { rows } = await pool.query(
-        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes)
-         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
+         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           record.event_type_id,
@@ -176,6 +189,7 @@ const store = {
           record.phone || null,
           record.recurring_group_id || null,
           record.notes || '',
+          duration_minutes,
         ]
       );
       return toBooking(rows[0]);
@@ -190,11 +204,12 @@ const store = {
       const start_time = data.start_time !== undefined ? data.start_time : existing.start_time;
       const end_time = data.end_time !== undefined ? data.end_time : existing.end_time;
       const notes = data.notes !== undefined ? data.notes : existing.notes;
+      const duration_minutes = data.duration_minutes !== undefined ? data.duration_minutes : existing.duration_minutes;
       await pool.query(
         `UPDATE bookings
-         SET first_name = $1, last_name = $2, email = $3, phone = $4, start_time = $5::timestamptz, end_time = $6::timestamptz, notes = $7
-         WHERE id = $8`,
-        [first_name, last_name, email, phone || null, start_time, end_time, notes || '', Number(id)]
+         SET first_name = $1, last_name = $2, email = $3, phone = $4, start_time = $5::timestamptz, end_time = $6::timestamptz, notes = $7, duration_minutes = $8
+         WHERE id = $9`,
+        [first_name, last_name, email, phone || null, start_time, end_time, notes || '', duration_minutes, Number(id)]
       );
       return store.bookings.getById(id);
     },
@@ -234,9 +249,10 @@ const store = {
         }
         const created = [];
         for (const slot of slots) {
+          const duration_minutes = slot.duration_minutes != null ? slot.duration_minutes : deriveDurationMinutes(slot.start_time, slot.end_time);
           const { rows } = await client.query(
-            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes)
-             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
+             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *`,
             [
               eventTypeId,
@@ -248,6 +264,7 @@ const store = {
               guest.phone || null,
               guest.recurring_group_id || null,
               guest.notes || '',
+              duration_minutes,
             ]
           );
           created.push(toBooking(rows[0]));

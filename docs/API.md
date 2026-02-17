@@ -176,6 +176,7 @@ Array of booking objects, sorted by start time:
 | event_type_name | string \| null | Event type name |
 | start_time | string | Start (e.g. `YYYY-MM-DD HH:mm:ss`) |
 | end_time | string | End |
+| duration_minutes | number | Length of the booking in minutes (stored per booking; derived from end−start if null) |
 | first_name | string | |
 | last_name | string | |
 | full_name | string | `"firstName lastName"` trimmed |
@@ -195,7 +196,7 @@ Get one booking by id (event edit page).
 
 **Parameters:** `id` — booking id.
 
-**Response:** `200 OK` — single booking object (same shape as in the list, with `event_type_name`, `full_name`, `recurring_session`, `notes`).
+**Response:** `200 OK` — single booking object (same shape as in the list, with `event_type_name`, `full_name`, `recurring_session`, `notes`, `duration_minutes`).
 
 **Errors:**
 
@@ -214,8 +215,9 @@ Update one booking (instructor). Partial update; omit fields to leave unchanged.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| startTime | string | no | New start (ISO or `YYYY-MM-DD HH:mm:ss`); end is derived from event type duration |
-| endTime | string | no | Override end time |
+| startTime | string | no | New start (ISO or `YYYY-MM-DD HH:mm:ss`). If only start changes, end is preserved using the booking’s duration. |
+| endTime | string | no | Override end time explicitly. |
+| durationMinutes | number | no | New duration in minutes; end is computed as start + durationMinutes. Overlap is checked for the new (start, end). |
 | firstName | string | no | Must be non-empty if provided |
 | lastName | string | no | Must be non-empty if provided |
 | email | string | no | Must be non-empty if provided |
@@ -228,7 +230,7 @@ Update one booking (instructor). Partial update; omit fields to leave unchanged.
 
 - `400` — `{ "error": "firstName required" }` (or lastName/email) when empty string sent
 - `404` — `{ "error": "Booking not found" }`
-- `409` — `{ "error": "Slot no longer available", "conflictingStart": "..." }` when changing time to an occupied slot
+- `409` — `{ "error": "This time would overlap with another lesson", "conflictingStart": "..." }` when the new start/end or duration would overlap another booking
 - `500` — server error
 
 ---
@@ -250,7 +252,7 @@ Delete one booking.
 
 ### POST /api/bookings
 
-Create one or more bookings (student). If the event type has recurring enabled and `recurringCount` > 1, creates that many bookings at the same weekday/time for consecutive weeks.
+Create one or more bookings (student). Each created booking gets its duration from the event type’s `durationMinutes`. If the event type has recurring enabled and `recurringCount` > 1, creates that many bookings at the same weekday/time for consecutive weeks.
 
 **Request body:**
 

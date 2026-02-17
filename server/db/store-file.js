@@ -71,9 +71,18 @@ function writeBookings(data) {
   fs.writeFileSync(bookingsPath, JSON.stringify(data, null, 2), 'utf8');
 }
 
-/** Ensure booking has notes field for API consistency */
+/** Derive duration in minutes from start/end when not stored */
+function deriveDurationMinutes(startTime, endTime) {
+  if (!startTime || !endTime) return 30;
+  const start = new Date(startTime.replace(' ', 'T'));
+  const end = new Date(endTime.replace(' ', 'T'));
+  return Math.round((end - start) / 60000) || 30;
+}
+
+/** Ensure booking has notes and duration_minutes for API consistency */
 function normalizeBooking(b) {
-  return { ...b, notes: b.notes ?? '' };
+  const duration_minutes = b.duration_minutes != null ? b.duration_minutes : deriveDurationMinutes(b.start_time, b.end_time);
+  return { ...b, notes: b.notes ?? '', duration_minutes };
 }
 
 let eventTypeId = 1;
@@ -191,7 +200,8 @@ const store = {
     },
     insert(record) {
       const list = readBookings();
-      const row = { id: bookingId++, ...record, notes: record.notes ?? '' };
+      const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
+      const row = { id: bookingId++, ...record, notes: record.notes ?? '', duration_minutes };
       list.push(row);
       writeBookings(list);
       return Promise.resolve(normalizeBooking(row));
@@ -210,6 +220,7 @@ const store = {
         start_time: data.start_time !== undefined ? data.start_time : row.start_time,
         end_time: data.end_time !== undefined ? data.end_time : row.end_time,
         notes: data.notes !== undefined ? data.notes : (row.notes ?? ''),
+        duration_minutes: data.duration_minutes !== undefined ? data.duration_minutes : (row.duration_minutes != null ? row.duration_minutes : deriveDurationMinutes(row.start_time, row.end_time)),
       };
       list[idx] = updated;
       writeBookings(list);
@@ -247,6 +258,7 @@ const store = {
         }
         const created = [];
         for (const slot of slots) {
+          const duration_minutes = slot.duration_minutes != null ? slot.duration_minutes : deriveDurationMinutes(slot.start_time, slot.end_time);
           const row = {
             id: bookingId++,
             event_type_id: eventTypeId,
@@ -258,6 +270,7 @@ const store = {
             phone: guest.phone || null,
             recurring_group_id: guest.recurring_group_id || null,
             notes: guest.notes ?? '',
+            duration_minutes,
           };
           list.push(row);
           created.push(row);

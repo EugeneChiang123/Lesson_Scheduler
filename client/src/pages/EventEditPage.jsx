@@ -25,12 +25,14 @@ export default function EventEditPage() {
   const [form, setForm] = useState({
     dateStr: '',
     timeStr: '',
+    durationMinutes: 30,
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
     notes: '',
   });
+  const [overlapError, setOverlapError] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/bookings/${bookingId}`)
@@ -48,15 +50,18 @@ export default function EventEditPage() {
         }
         setBooking(data);
         const { dateStr, timeStr } = parseDateTime(data.start_time, data.end_time);
+        const durationMinutes = data.duration_minutes != null ? data.duration_minutes : 30;
         setForm({
           dateStr,
           timeStr,
+          durationMinutes,
           firstName: data.first_name || '',
           lastName: data.last_name || '',
           email: data.email || '',
           phone: data.phone || '',
           notes: data.notes || '',
         });
+        setOverlapError(null);
       })
       .catch(() => navigate('/setup/bookings', { replace: true }))
       .finally(() => setLoading(false));
@@ -64,7 +69,8 @@ export default function EventEditPage() {
 
   const handleSave = () => {
     if (!booking) return;
-    const { firstName, lastName, email, dateStr, timeStr, phone, notes } = form;
+    setOverlapError(null);
+    const { firstName, lastName, email, dateStr, timeStr, durationMinutes, phone, notes } = form;
     if (!firstName.trim()) {
       alert('First name is required');
       return;
@@ -82,26 +88,55 @@ export default function EventEditPage() {
       return;
     }
     const startTime = `${dateStr}T${timeStr}:00`;
+    const existingStart = (booking.start_time || '').replace(' ', 'T').substring(0, 19);
+    const payload = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim(),
+      phone: phone != null ? String(phone).trim() : '',
+      notes: notes != null ? String(notes) : '',
+    };
+    if (startTime !== existingStart) payload.startTime = startTime;
+    if (durationMinutes !== booking.duration_minutes) payload.durationMinutes = durationMinutes;
     setSaving(true);
     fetch(`${API}/bookings/${bookingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
-        phone: phone != null ? String(phone).trim() : '',
-        startTime,
-        notes: notes != null ? String(notes) : '',
-      }),
+      body: JSON.stringify(payload),
     })
       .then((r) => {
-        if (!r.ok) return r.json().then((d) => Promise.reject(new Error(d.error || 'Failed')));
+        if (!r.ok) {
+          return r.json().then((d) => Promise.reject({ status: r.status, error: d.error, conflictingStart: d.conflictingStart }));
+        }
         return r.json();
       })
       .then(() => navigate('/setup/bookings'))
       .catch((e) => {
-        alert(e.message);
+        if (e.status === 409) {
+          setOverlapError(e.error || 'This time would overlap with another lesson. Try a shorter duration or a different time.');
+          fetch(`${API}/bookings/${bookingId}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((data) => {
+              if (data) {
+                const { dateStr, timeStr } = parseDateTime(data.start_time, data.end_time);
+                const durationMinutes = data.duration_minutes != null ? data.duration_minutes : 30;
+                setBooking(data);
+                setForm({
+                  dateStr,
+                  timeStr,
+                  durationMinutes,
+                  firstName: data.first_name || '',
+                  lastName: data.last_name || '',
+                  email: data.email || '',
+                  phone: data.phone || '',
+                  notes: data.notes || '',
+                });
+              }
+            })
+            .catch(() => {});
+        } else {
+          alert(e.error || e.message || 'Failed to save');
+        }
         setSaving(false);
       });
   };
@@ -160,6 +195,21 @@ export default function EventEditPage() {
             style={styles.input}
           />
         </div>
+        <div style={styles.field}>
+          <label>Duration (minutes)</label>
+          <select
+            value={form.durationMinutes}
+            onChange={(e) => setForm((f) => ({ ...f, durationMinutes: Number(e.target.value) }))}
+            style={styles.input}
+          >
+            {[15, 30, 45, 60].map((m) => (
+              <option key={m} value={m}>{m} min</option>
+            ))}
+          </select>
+        </div>
+        {overlapError && (
+          <div style={styles.errorBox}>{overlapError}</div>
+        )}
         <div style={styles.field}>
           <label>First name</label>
           <input
@@ -266,6 +316,15 @@ const styles = {
     fontWeight: 600,
   },
   cancelLink: { color: theme.muted, textDecoration: 'none', marginLeft: 8 },
+  errorBox: {
+    marginBottom: 16,
+    padding: 12,
+    background: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: theme.borderRadius,
+    color: '#b91c1c',
+    fontSize: 14,
+  },
   deleteSection: { marginTop: 32, paddingTop: 24, borderTop: `1px solid ${theme.border}` },
   deleteBtn: {
     padding: '8px 16px',

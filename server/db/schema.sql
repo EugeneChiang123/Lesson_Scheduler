@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   email VARCHAR(255) NOT NULL,
   phone VARCHAR(255),
   recurring_group_id VARCHAR(255),
-  notes TEXT
+  notes TEXT,
+  duration_minutes INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_event_type_id ON bookings(event_type_id);
@@ -34,3 +35,5 @@ CREATE INDEX IF NOT EXISTS idx_bookings_start_time ON bookings(start_time);
 -- Add columns for existing databases (safe to run multiple times).
 ALTER TABLE event_types ADD COLUMN IF NOT EXISTS location VARCHAR(512);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;
+UPDATE bookings SET duration_minutes = EXTRACT(EPOCH FROM (end_time - start_time)) / 60 WHERE duration_minutes IS NULL;

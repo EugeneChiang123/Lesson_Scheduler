@@ -25,6 +25,7 @@ router.get('/', async (req, res) => {
         event_type_name: et ? et.name : null,
         start_time: b.start_time,
         end_time: b.end_time,
+        duration_minutes: b.duration_minutes,
         first_name: b.first_name,
         last_name: b.last_name,
         full_name: `${b.first_name || ''} ${b.last_name || ''}`.trim(),
@@ -56,6 +57,7 @@ async function enrichBooking(b, list, eventTypes) {
     event_type_name: et ? et.name : null,
     start_time: b.start_time,
     end_time: b.end_time,
+    duration_minutes: b.duration_minutes,
     first_name: b.first_name,
     last_name: b.last_name,
     full_name: `${b.first_name || ''} ${b.last_name || ''}`.trim(),
@@ -88,26 +90,42 @@ router.patch('/:id', async (req, res) => {
     const id = req.params.id;
     const existing = await store.bookings.getById(id);
     if (!existing) return res.status(404).json({ error: 'Booking not found' });
-    const { startTime, endTime, firstName, lastName, email, phone, notes } = req.body;
+    const { startTime, endTime, durationMinutes, firstName, lastName, email, phone, notes } = req.body;
     if (firstName !== undefined && !firstName) return res.status(400).json({ error: 'firstName required' });
     if (lastName !== undefined && !lastName) return res.status(400).json({ error: 'lastName required' });
     if (email !== undefined && !email) return res.status(400).json({ error: 'email required' });
 
     let start_time = existing.start_time;
-    let end_time = existing.end_time;
     if (startTime !== undefined) {
       const norm = startTime.replace(' ', 'T').substring(0, 19);
       start_time = norm.replace('T', ' ');
-      const eventType = await store.eventTypes.getById(existing.event_type_id);
-      const duration = eventType ? (eventType.durationMinutes || 30) : 30;
-      end_time = addMinutes(start_time, duration);
     }
-    if (endTime !== undefined) end_time = endTime.replace(' ', 'T').substring(0, 19).replace('T', ' ');
+    const existingDuration = existing.duration_minutes != null ? existing.duration_minutes : 30;
+
+    let end_time = existing.end_time;
+    if (endTime !== undefined) {
+      end_time = endTime.replace(' ', 'T').substring(0, 19).replace('T', ' ');
+    } else if (durationMinutes !== undefined) {
+      end_time = addMinutes(start_time, durationMinutes);
+    } else if (start_time !== existing.start_time) {
+      end_time = addMinutes(start_time, existingDuration);
+    }
+
+    let duration_minutes = existing.duration_minutes != null ? existing.duration_minutes : existingDuration;
+    if (durationMinutes !== undefined) {
+      duration_minutes = Math.max(1, Number(durationMinutes));
+    } else if (start_time !== existing.start_time || end_time !== existing.end_time) {
+      const computed = Math.round((new Date(end_time.replace(' ', 'T')) - new Date(start_time.replace(' ', 'T'))) / 60000);
+      duration_minutes = Math.max(1, computed) || existingDuration;
+    }
 
     if (start_time !== existing.start_time || end_time !== existing.end_time) {
       const overlap = await store.bookings.findOverlappingExcluding(Number(id), start_time, end_time);
       if (overlap) {
-        return res.status(409).json({ error: 'Slot no longer available', conflictingStart: start_time });
+        return res.status(409).json({
+          error: 'This time would overlap with another lesson',
+          conflictingStart: overlap.start_time,
+        });
       }
     }
 
@@ -118,6 +136,7 @@ router.patch('/:id', async (req, res) => {
       phone: phone !== undefined ? phone : existing.phone,
       start_time,
       end_time,
+      duration_minutes,
       notes: notes !== undefined ? notes : existing.notes,
     };
     const updated = await store.bookings.update(id, data);
@@ -209,7 +228,7 @@ router.post('/', async (req, res) => {
     const slots = startTimes.map((st) => {
       const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
       const endNorm = addMinutes(startNorm, duration);
-      return { start_time: startNorm, end_time: endNorm };
+      return { start_time: startNorm, end_time: endNorm, duration_minutes: duration };
     });
     const guest = { first_name: firstName, last_name: lastName, email, phone, recurring_group_id: recurringGroupId };
     const result = await store.bookings.createBatchIfNoConflict(eventType.id, slots, guest);

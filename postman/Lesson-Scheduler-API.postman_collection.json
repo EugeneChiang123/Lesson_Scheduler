@@ -98,7 +98,7 @@
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/bookings",
-        "description": "List all bookings (instructor calendar). Returns array with event_type_name, start_time, end_time, guest fields, recurring_session, notes."
+        "description": "List all bookings (instructor calendar). Returns array with event_type_name, start_time, end_time, duration_minutes, guest fields, recurring_session, notes."
       }
     },
     {
@@ -107,7 +107,7 @@
         "method": "GET",
         "header": [],
         "url": "{{baseUrl}}/api/bookings/1",
-        "description": "Get one booking by id (event edit page). Replace id in URL. 404 if not found."
+        "description": "Get one booking by id (event edit page). Returns same shape as list including duration_minutes. Replace id in URL. 404 if not found."
       }
     },
     {
@@ -122,10 +122,10 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+1234567890\",\n  \"startTime\": \"2026-02-20T09:00:00\",\n  \"notes\": \"Follow-up session\"\n}"
+          "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+1234567890\",\n  \"startTime\": \"2026-02-20T09:00:00\",\n  \"durationMinutes\": 45,\n  \"notes\": \"Follow-up session\"\n}"
         },
         "url": "{{baseUrl}}/api/bookings/1",
-        "description": "Update one booking (partial). Replace id in URL. 409 if new time slot is taken."
+        "description": "Update one booking (partial). Optional: startTime, endTime, durationMinutes. Replace id in URL. 409 if the new time range would overlap another lesson (error: This time would overlap with another lesson; conflictingStart may be set)."
       }
     },
     {
