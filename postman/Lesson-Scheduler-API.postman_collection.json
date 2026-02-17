@@ -1,0 +1,48 @@
+{
+  "info": {
+    "name": "Lesson Scheduler API",
+    "description": "Verify API endpoints work (locally and on Vercel). Set {{baseUrl}} to your deployment, e.g. https://your-app.vercel.app or http://localhost:5000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://lesson-scheduler-lti1unhx2-eugenechiang123-gmailcoms-projects.vercel.app" }
+  ],
+  "item": [
+    {
+      "name": "Health (store type)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/health",
+        "description": "Returns { store: \"postgres\" | \"file\" }. Confirms API is reachable."
+      }
+    },
+    {
+      "name": "Get event type by slug (30min-intro)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/event-types/30min-intro",
+        "description": "Public booking page: fetch event type. 200 = OK, 404 = not found (e.g. file store on Vercel or slug missing)."
+      }
+    },
+    {
+      "name": "List event types",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/event-types",
+        "description": "List all event types (instructor UI)."
+      }
+    },
+    {
+      "name": "Get slots for date",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/event-types/30min-intro/slots?date=2026-02-20",
+        "description": "Available slots for a given date. Requires event type to exist."
+      }
+    }
+  ]
+}
