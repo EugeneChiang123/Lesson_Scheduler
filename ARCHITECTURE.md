@@ -116,6 +116,8 @@ No auth in v1; optional shared secret for mutation APIs.
 
 ## Flows
 
+For a route-to-page map, page-to-API table, and sequence diagrams, see [docs/INTERACTIONS.md](docs/INTERACTIONS.md).
+
 **Student**
 
 1. Landing page → click booking link.
