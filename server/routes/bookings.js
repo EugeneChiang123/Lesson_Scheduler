@@ -80,7 +80,11 @@ router.patch('/:id', async (req, res) => {
 
     let duration_minutes = existing.duration_minutes != null ? existing.duration_minutes : existingDuration;
     if (durationMinutes !== undefined) {
-      duration_minutes = Math.max(1, Number(durationMinutes));
+      const parsed = Number(durationMinutes);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return res.status(400).json({ error: 'durationMinutes must be a positive number' });
+      }
+      duration_minutes = Math.max(1, Math.round(parsed));
     }
 
     let end_time = existing.end_time;
