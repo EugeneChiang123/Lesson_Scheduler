@@ -10,6 +10,7 @@ const emptyForm = {
   name: '',
   description: '',
   durationMinutes: 30,
+  location: '',
   allowRecurring: false,
   recurringCount: 4,
   availability: [],
@@ -33,6 +34,7 @@ export default function SetupEventForm() {
           name: et.name,
           description: et.description || '',
           durationMinutes: et.durationMinutes ?? 30,
+          location: et.location ?? '',
           allowRecurring: et.allowRecurring ?? false,
           recurringCount: et.recurringCount ?? 4,
           availability: Array.isArray(et.availability) ? et.availability : [],
@@ -121,6 +123,15 @@ export default function SetupEventForm() {
               <option key={n} value={n}>{n} min</option>
             ))}
           </select>
+        </div>
+        <div style={styles.field}>
+          <label>Location</label>
+          <input
+            value={form.location}
+            onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+            placeholder="e.g. Room 3, Zoom link"
+            style={styles.input}
+          />
         </div>
         <div style={styles.field}>
           <label style={styles.checkLabel}>

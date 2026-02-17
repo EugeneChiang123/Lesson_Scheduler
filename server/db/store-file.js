@@ -71,6 +71,11 @@ function writeBookings(data) {
   fs.writeFileSync(bookingsPath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/** Ensure booking has notes field for API consistency */
+function normalizeBooking(b) {
+  return { ...b, notes: b.notes ?? '' };
+}
+
 let eventTypeId = 1;
 let bookingId = 1;
 
@@ -108,6 +113,7 @@ const store = {
         allowRecurring: Boolean(data.allowRecurring),
         recurringCount: clampRecurringCount(data.recurringCount ?? 1),
         availability: Array.isArray(data.availability) ? data.availability : [],
+        location: data.location != null ? String(data.location) : '',
       };
       list.push(row);
       writeEventTypes(list);
@@ -130,6 +136,7 @@ const store = {
         allowRecurring: data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : row.allowRecurring,
         recurringCount: data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(row.recurringCount),
         availability: data.availability !== undefined ? data.availability : row.availability,
+        location: data.location !== undefined ? (data.location != null ? String(data.location) : '') : (row.location || ''),
       };
       list[idx] = updated;
       writeEventTypes(list);
@@ -138,7 +145,13 @@ const store = {
   },
   bookings: {
     list() {
-      return Promise.resolve(readBookings());
+      const list = readBookings();
+      return Promise.resolve(list.map(normalizeBooking));
+    },
+    getById(id) {
+      const list = readBookings();
+      const b = list.find((x) => x.id === Number(id)) || null;
+      return Promise.resolve(b ? normalizeBooking(b) : null);
     },
     getByEventTypeAndDate(eventTypeId, dateStr) {
       const list = readBookings().filter(
@@ -164,12 +177,51 @@ const store = {
       });
       return Promise.resolve(found || null);
     },
+    findOverlappingExcluding(bookingId, startTime, endTime) {
+      const list = readBookings();
+      const start = startTime.replace(' ', 'T');
+      const end = endTime.replace(' ', 'T');
+      const found = list.find((b) => {
+        if (b.id === Number(bookingId)) return false;
+        const bStart = b.start_time.replace(' ', 'T');
+        const bEnd = b.end_time.replace(' ', 'T');
+        return start < bEnd && end > bStart;
+      });
+      return Promise.resolve(found ? normalizeBooking(found) : null);
+    },
     insert(record) {
       const list = readBookings();
-      const row = { id: bookingId++, ...record };
+      const row = { id: bookingId++, ...record, notes: record.notes ?? '' };
       list.push(row);
       writeBookings(list);
-      return Promise.resolve(row);
+      return Promise.resolve(normalizeBooking(row));
+    },
+    update(id, data) {
+      const list = readBookings();
+      const idx = list.findIndex((b) => b.id === Number(id));
+      if (idx === -1) return Promise.resolve(null);
+      const row = list[idx];
+      const updated = {
+        ...row,
+        first_name: data.first_name !== undefined ? data.first_name : row.first_name,
+        last_name: data.last_name !== undefined ? data.last_name : row.last_name,
+        email: data.email !== undefined ? data.email : row.email,
+        phone: data.phone !== undefined ? data.phone : row.phone,
+        start_time: data.start_time !== undefined ? data.start_time : row.start_time,
+        end_time: data.end_time !== undefined ? data.end_time : row.end_time,
+        notes: data.notes !== undefined ? data.notes : (row.notes ?? ''),
+      };
+      list[idx] = updated;
+      writeBookings(list);
+      return Promise.resolve(normalizeBooking(updated));
+    },
+    delete(id) {
+      const list = readBookings();
+      const idx = list.findIndex((b) => b.id === Number(id));
+      if (idx === -1) return Promise.resolve(false);
+      list.splice(idx, 1);
+      writeBookings(list);
+      return Promise.resolve(true);
     },
 
     /**
@@ -205,6 +257,7 @@ const store = {
             email: guest.email,
             phone: guest.phone || null,
             recurring_group_id: guest.recurring_group_id || null,
+            notes: guest.notes ?? '',
           };
           list.push(row);
           created.push(row);

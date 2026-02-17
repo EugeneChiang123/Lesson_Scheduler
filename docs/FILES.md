@@ -24,7 +24,7 @@ One-place reference for what each important file does and how it fits in. For da
 | **server/app.js** | Express app: CORS, JSON body parser, `GET /api/health`, mounts event-types/slots/bookings routes, serves static client and SPA fallback in production/Vercel. |
 | **server/routes/eventTypes.js** | Event types CRUD: list, get by id, get by slug, create (POST), update (PATCH). Uses `server/db/store`. |
 | **server/routes/slots.js** | `GET /:slug/slots?date=YYYY-MM-DD`: computes available start times from event type availability and existing bookings. Uses store and exports `getSlotsForDate` for bookings route. |
-| **server/routes/bookings.js** | List all bookings (instructor); POST to create one or more bookings (student), including recurring logic and conflict checks. Uses store and slots’ `getSlotsForDate`. |
+| **server/routes/bookings.js** | List all bookings (instructor); GET /:id, PATCH /:id, DELETE /:id for single booking; POST to create one or more bookings (student), including recurring logic and conflict checks. Uses store and slots’ `getSlotsForDate`. |
 | **server/db/store.js** | Store switcher: if `POSTGRES_URL` or `DATABASE_URL` is set, requires `store-pg`, else requires `store-file`. Single API for routes. |
 | **server/db/store-file.js** | File-backed store: JSON files in `server/db/` (or `/tmp` on Vercel). Implements same API as store-pg; uses per–event-type mutex for atomic booking conflict check. |
 | **server/db/store-pg.js** | Postgres-backed store (same API as store-file). Uses `pg` Pool; maps DB rows to app shapes (camelCase event types, formatted timestamps). |
@@ -40,12 +40,13 @@ One-place reference for what each important file does and how it fits in. For da
 | File | Purpose |
 |------|--------|
 | **client/src/main.jsx** | React root: creates root, wraps app in `BrowserRouter`, mounts `App`, imports global `index.css`. |
-| **client/src/App.jsx** | Route definitions: `/` → redirect to `/setup`, `/book/:eventTypeSlug` → Book, `/setup` (layout) with index (SetupHome), `bookings`, `new`, `:id/edit`. |
+| **client/src/App.jsx** | Route definitions: `/` → redirect to `/setup`, `/book/:eventTypeSlug` → Book, `/setup` (layout) with index (SetupHome), `bookings`, `bookings/:bookingId` (EventEditPage), `new`, `:id/edit`. |
 | **client/src/components/InstructorLayout.jsx** | Layout for `/setup`: sidebar (brand, Create, Scheduling, Bookings links) and main area with `Outlet` for nested routes. |
 | **client/src/pages/SetupHome.jsx** | Instructor “Scheduling” page: lists event types (GET /api/event-types), search, copy booking link, links to create/edit and to Bookings. |
-| **client/src/pages/SetupEventForm.jsx** | Create or edit event type: loads one by id when editing (GET /api/event-types/id/:id), submits POST or PATCH to event-types, then navigates back to /setup. |
+| **client/src/pages/SetupEventForm.jsx** | Create or edit event type: loads one by id when editing (GET /api/event-types/id/:id), submits POST or PATCH to event-types (includes location), then navigates back to /setup. |
 | **client/src/pages/Book.jsx** | Public booking page: loads event type by slug, month calendar, fetches slots for selected date, form (name, email, phone), POST /api/bookings, success with optional add-to-calendar link. |
-| **client/src/pages/BookingsCalendar.jsx** | Instructor calendar: lists all bookings (GET /api/bookings), month/week/day views, navigates by period. |
+| **client/src/pages/BookingsCalendar.jsx** | Instructor calendar: lists all bookings (GET /api/bookings), month/week/day views, hover popover with student info, click event → EventEditPage. |
+| **client/src/pages/EventEditPage.jsx** | Edit one booking: GET /api/bookings/:id, form (date, time, name, email, phone, notes), PATCH to save, DELETE to remove; redirects to /setup/bookings. |
 | **client/src/utils/formatDuration.js** | Formats duration in minutes for display (e.g. “30 min”). |
 | **client/src/utils/formatAvailability.js** | Formats event type availability array for display (e.g. “Mon 9:00 AM – 5:00 PM”). |
 | **client/src/styles/theme.js** | Shared theme tokens (colors, spacing, border radius) used by layout and pages. |

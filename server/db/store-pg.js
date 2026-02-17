@@ -37,6 +37,7 @@ function toEventType(row) {
     allowRecurring: Boolean(row.allow_recurring),
     recurringCount: row.recurring_count,
     availability: Array.isArray(row.availability) ? row.availability : (row.availability || []),
+    location: row.location || '',
   };
 }
 
@@ -53,6 +54,7 @@ function toBooking(row) {
     email: row.email,
     phone: row.phone || null,
     recurring_group_id: row.recurring_group_id || null,
+    notes: row.notes || '',
   };
 }
 
@@ -78,11 +80,12 @@ const store = {
       const availability = Array.isArray(data.availability) ? data.availability : [];
       const { rows: existing } = await pool.query('SELECT id FROM event_types WHERE slug = $1', [data.slug]);
       if (existing.length > 0) throw new Error('Slug already exists');
+      const location = (data.location != null && String(data.location)) || '';
       const { rows } = await pool.query(
-        `INSERT INTO event_types (slug, name, description, duration_minutes, allow_recurring, recurring_count, availability)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+        `INSERT INTO event_types (slug, name, description, duration_minutes, allow_recurring, recurring_count, availability, location)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
          RETURNING *`,
-        [data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability)]
+        [data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability), location]
       );
       return toEventType(rows[0]);
     },
@@ -102,12 +105,13 @@ const store = {
       const allowRecurring = data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : existing.allowRecurring;
       const recurringCount = data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(existing.recurringCount);
       const availability = data.availability !== undefined ? data.availability : existing.availability;
+      const location = data.location !== undefined ? (data.location != null && String(data.location)) || '' : (existing.location || '');
       const { rows } = await pool.query(
         `UPDATE event_types
-         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb
-         WHERE id = $8
+         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb, location = $8
+         WHERE id = $9
          RETURNING *`,
-        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), Number(id)]
+        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), location, Number(id)]
       );
       return toEventType(rows[0]);
     },
@@ -116,6 +120,10 @@ const store = {
     async list() {
       const { rows } = await pool.query('SELECT * FROM bookings ORDER BY start_time');
       return rows.map(toBooking);
+    },
+    async getById(id) {
+      const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1', [Number(id)]);
+      return toBooking(rows[0] || null);
     },
     async getByEventTypeAndDate(eventTypeId, dateStr) {
       const prefix = dateStr.replace('T', ' ').substring(0, 10);
@@ -144,10 +152,19 @@ const store = {
       );
       return rows[0] ? toBooking(rows[0]) : null;
     },
+    async findOverlappingExcluding(bookingId, startTime, endTime) {
+      const start = startTime.replace(' ', 'T').substring(0, 19);
+      const end = endTime.replace(' ', 'T').substring(0, 19);
+      const { rows } = await pool.query(
+        'SELECT * FROM bookings WHERE id != $1 AND start_time < $2::timestamptz AND end_time > $3::timestamptz LIMIT 1',
+        [Number(bookingId), end, start]
+      );
+      return rows[0] ? toBooking(rows[0]) : null;
+    },
     async insert(record) {
       const { rows } = await pool.query(
-        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
-         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8)
+        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes)
+         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
         [
           record.event_type_id,
@@ -158,9 +175,32 @@ const store = {
           record.email,
           record.phone || null,
           record.recurring_group_id || null,
+          record.notes || '',
         ]
       );
       return toBooking(rows[0]);
+    },
+    async update(id, data) {
+      const existing = await store.bookings.getById(id);
+      if (!existing) return null;
+      const first_name = data.first_name !== undefined ? data.first_name : existing.first_name;
+      const last_name = data.last_name !== undefined ? data.last_name : existing.last_name;
+      const email = data.email !== undefined ? data.email : existing.email;
+      const phone = data.phone !== undefined ? data.phone : existing.phone;
+      const start_time = data.start_time !== undefined ? data.start_time : existing.start_time;
+      const end_time = data.end_time !== undefined ? data.end_time : existing.end_time;
+      const notes = data.notes !== undefined ? data.notes : existing.notes;
+      await pool.query(
+        `UPDATE bookings
+         SET first_name = $1, last_name = $2, email = $3, phone = $4, start_time = $5::timestamptz, end_time = $6::timestamptz, notes = $7
+         WHERE id = $8`,
+        [first_name, last_name, email, phone || null, start_time, end_time, notes || '', Number(id)]
+      );
+      return store.bookings.getById(id);
+    },
+    async delete(id) {
+      const { rowCount } = await pool.query('DELETE FROM bookings WHERE id = $1', [Number(id)]);
+      return rowCount > 0;
     },
 
     /**
@@ -195,8 +235,8 @@ const store = {
         const created = [];
         for (const slot of slots) {
           const { rows } = await client.query(
-            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id)
-             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8)
+            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes)
+             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9)
              RETURNING *`,
             [
               eventTypeId,
@@ -207,6 +247,7 @@ const store = {
               guest.email,
               guest.phone || null,
               guest.recurring_group_id || null,
+              guest.notes || '',
             ]
           );
           created.push(toBooking(rows[0]));

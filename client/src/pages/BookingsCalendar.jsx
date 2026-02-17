@@ -1,6 +1,38 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const API = '/api';
+
+function EventHoverCard({ booking, x, y }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: x,
+        top: y + 12,
+        padding: '10px 12px',
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 8,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+        fontSize: 13,
+        maxWidth: 280,
+        pointerEvents: 'none',
+        zIndex: 1000,
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>{booking.full_name}</div>
+      {booking.email && <div style={{ color: '#6b7280', marginBottom: 2 }}>{booking.email}</div>}
+      {booking.phone && <div style={{ color: '#6b7280', marginBottom: 4 }}>{booking.phone}</div>}
+      {booking.event_type_name && <div style={{ color: '#0a7ea4', fontSize: 12, marginTop: 4 }}>{booking.event_type_name}</div>}
+      {booking.recurring_session && (
+        <div style={{ color: '#0a7ea4', fontSize: 12, marginTop: 2 }}>
+          Session {booking.recurring_session.index} of {booking.recurring_session.total}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function parseDt(str) {
   const s = (str || '').replace(' ', 'T').substring(0, 19);
@@ -27,10 +59,12 @@ function getEndOfDay(d) {
 }
 
 export default function BookingsCalendar() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('month');
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [hoverState, setHoverState] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/bookings`)
@@ -117,19 +151,45 @@ export default function BookingsCalendar() {
       </div>
 
       {viewMode === 'month' && (
-        <MonthView currentDate={currentDate} bookings={bookingsWithDates} getBookingsForDay={getBookingsForDay} />
+        <MonthView
+          currentDate={currentDate}
+          bookings={bookingsWithDates}
+          getBookingsForDay={getBookingsForDay}
+          onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
+          onEventLeave={() => setHoverState(null)}
+          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+        />
       )}
       {viewMode === 'week' && (
-        <WeekView currentDate={currentDate} bookings={getBookingsForWeek()} />
+        <WeekView
+          currentDate={currentDate}
+          bookings={getBookingsForWeek()}
+          onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
+          onEventLeave={() => setHoverState(null)}
+          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+        />
       )}
       {viewMode === 'day' && (
-        <DayView currentDate={currentDate} bookings={getBookingsForDayView()} />
+        <DayView
+          currentDate={currentDate}
+          bookings={getBookingsForDayView()}
+          onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
+          onEventLeave={() => setHoverState(null)}
+          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+        />
+      )}
+      {hoverState && (
+        <EventHoverCard
+          booking={hoverState.booking}
+          x={hoverState.x}
+          y={hoverState.y}
+        />
       )}
     </div>
   );
 }
 
-function MonthView({ currentDate, getBookingsForDay }) {
+function MonthView({ currentDate, getBookingsForDay, onEventHover, onEventLeave, onEventClick }) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const first = new Date(year, month, 1);
@@ -171,7 +231,16 @@ function MonthView({ currentDate, getBookingsForDay }) {
             >
               <span style={styles.dayNum}>{cell.day}</span>
               {dayBookings.map((b) => (
-                <div key={b.id} style={styles.monthEvent} title={`${b.full_name} ${b.start_time}`}>
+                <div
+                  key={b.id}
+                  style={styles.monthEvent}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onEventClick(b)}
+                  onKeyDown={(e) => e.key === 'Enter' && onEventClick(b)}
+                  onMouseEnter={(e) => onEventHover(b, e)}
+                  onMouseLeave={onEventLeave}
+                >
                   {b.full_name}
                 </div>
               ))}
@@ -183,7 +252,7 @@ function MonthView({ currentDate, getBookingsForDay }) {
   );
 }
 
-function WeekView({ currentDate, bookings }) {
+function WeekView({ currentDate, bookings, onEventHover, onEventLeave, onEventClick }) {
   const start = new Date(currentDate);
   start.setDate(start.getDate() - start.getDay());
   start.setHours(0, 0, 0, 0);
@@ -225,7 +294,16 @@ function WeekView({ currentDate, bookings }) {
               return (
                 <div key={hour} style={styles.weekCell}>
                   {evs.map((b) => (
-                    <div key={b.id} style={styles.weekEvent} title={b.start_time}>
+                    <div
+                      key={b.id}
+                      style={styles.weekEvent}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onEventClick(b)}
+                      onKeyDown={(e) => e.key === 'Enter' && onEventClick(b)}
+                      onMouseEnter={(e) => onEventHover(b, e)}
+                      onMouseLeave={onEventLeave}
+                    >
                       {b.full_name}
                     </div>
                   ))}
@@ -239,8 +317,8 @@ function WeekView({ currentDate, bookings }) {
   );
 }
 
-function DayView({ currentDate, bookings }) {
-  const dayBookings = bookings.sort((a, b) => a.start - b.start);
+function DayView({ currentDate, bookings, onEventHover, onEventLeave, onEventClick }) {
+  const dayBookings = [...bookings].sort((a, b) => a.start - b.start);
   const lessonsToday = dayBookings.length;
 
   return (
@@ -250,7 +328,16 @@ function DayView({ currentDate, bookings }) {
       </div>
       <div style={styles.dayList}>
         {dayBookings.map((b) => (
-          <div key={b.id} style={styles.dayEvent}>
+          <div
+            key={b.id}
+            style={styles.dayEvent}
+            role="button"
+            tabIndex={0}
+            onClick={() => onEventClick(b)}
+            onKeyDown={(e) => e.key === 'Enter' && onEventClick(b)}
+            onMouseEnter={(e) => onEventHover(b, e)}
+            onMouseLeave={onEventLeave}
+          >
             <div style={styles.dayEventTime}>
               {b.start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
               {' – '}
@@ -350,6 +437,7 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    cursor: 'pointer',
   },
   weekSection: {
     background: '#fff',
@@ -373,6 +461,7 @@ const styles = {
     fontSize: 12,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    cursor: 'pointer',
   },
   daySection: {
     background: '#fff',
@@ -388,6 +477,7 @@ const styles = {
     border: `1px solid ${BORDER}`,
     borderRadius: 10,
     background: '#fafafa',
+    cursor: 'pointer',
   },
   dayEventTime: { fontSize: 13, color: MUTED, marginBottom: 6 },
   dayEventName: { fontWeight: 600, marginBottom: 2, fontSize: 15, color: '#111' },

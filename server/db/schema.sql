@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS event_types (
   duration_minutes INTEGER NOT NULL DEFAULT 30,
   allow_recurring BOOLEAN NOT NULL DEFAULT false,
   recurring_count INTEGER NOT NULL DEFAULT 1,
-  availability JSONB NOT NULL DEFAULT '[]'
+  availability JSONB NOT NULL DEFAULT '[]',
+  location VARCHAR(512)
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_types_slug ON event_types(slug);
@@ -23,8 +24,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   last_name VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL,
   phone VARCHAR(255),
-  recurring_group_id VARCHAR(255)
+  recurring_group_id VARCHAR(255),
+  notes TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_event_type_id ON bookings(event_type_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_start_time ON bookings(start_time);
+
+-- Add columns for existing databases (safe to run multiple times).
+ALTER TABLE event_types ADD COLUMN IF NOT EXISTS location VARCHAR(512);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS notes TEXT;

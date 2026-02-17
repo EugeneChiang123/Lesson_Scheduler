@@ -53,6 +53,7 @@ Array of event type objects:
 | allowRecurring | boolean | Whether recurring bookings are allowed |
 | recurringCount | number | Number of sessions per recurring booking (1–52) |
 | availability | array | Weekly windows: `{ day, start, end }`; `day` 0–6 (Sun–Sat), `start`/`end` like `"09:00"`, `"17:00"` |
+| location | string | Optional location (e.g. room, Zoom link) |
 
 **Errors:** `500` — server error with `{ "error": "message" }`.
 
@@ -103,6 +104,7 @@ Create an event type (instructor).
 | allowRecurring | boolean | no | Default false |
 | recurringCount | number | no | Default 1 (clamped 1–52) |
 | availability | array | no | Default `[]`; items `{ day, start, end }` |
+| location | string | no | Default `""` |
 
 **Response:** `201 Created` — created event type object.
 
@@ -181,8 +183,68 @@ Array of booking objects, sorted by start time:
 | phone | string \| null | |
 | recurring_group_id | string \| null | Set when part of a recurring booking |
 | recurring_session | object \| null | `{ index, total }` when recurring (e.g. session 2 of 4) |
+| notes | string | Optional notes / additional details |
 
 **Errors:** `500` — server error.
+
+---
+
+### GET /api/bookings/:id
+
+Get one booking by id (event edit page).
+
+**Parameters:** `id` — booking id.
+
+**Response:** `200 OK` — single booking object (same shape as in the list, with `event_type_name`, `full_name`, `recurring_session`, `notes`).
+
+**Errors:**
+
+- `404` — `{ "error": "Booking not found" }`
+- `500` — server error
+
+---
+
+### PATCH /api/bookings/:id
+
+Update one booking (instructor). Partial update; omit fields to leave unchanged.
+
+**Parameters:** `id` — booking id.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| startTime | string | no | New start (ISO or `YYYY-MM-DD HH:mm:ss`); end is derived from event type duration |
+| endTime | string | no | Override end time |
+| firstName | string | no | Must be non-empty if provided |
+| lastName | string | no | Must be non-empty if provided |
+| email | string | no | Must be non-empty if provided |
+| phone | string | no | |
+| notes | string | no | Additional details |
+
+**Response:** `200 OK` — updated booking object (enriched like GET /api/bookings/:id).
+
+**Errors:**
+
+- `400` — `{ "error": "firstName required" }` (or lastName/email) when empty string sent
+- `404` — `{ "error": "Booking not found" }`
+- `409` — `{ "error": "Slot no longer available", "conflictingStart": "..." }` when changing time to an occupied slot
+- `500` — server error
+
+---
+
+### DELETE /api/bookings/:id
+
+Delete one booking.
+
+**Parameters:** `id` — booking id.
+
+**Response:** `204 No Content` on success.
+
+**Errors:**
+
+- `404` — `{ "error": "Booking not found" }`
+- `500` — server error
 
 ---
 

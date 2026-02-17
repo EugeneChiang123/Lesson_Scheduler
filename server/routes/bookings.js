@@ -32,9 +32,112 @@ router.get('/', async (req, res) => {
         phone: b.phone,
         recurring_group_id: b.recurring_group_id,
         recurring_session: recurringSession,
+        notes: b.notes || '',
       };
     }).sort((a, b) => a.start_time.localeCompare(b.start_time));
     res.json(sorted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Enrich a single booking with event_type_name, full_name, recurring_session */
+async function enrichBooking(b, list, eventTypes) {
+  const et = eventTypes.find((e) => e.id === b.event_type_id);
+  let recurringSession = null;
+  if (b.recurring_group_id && list) {
+    const group = list.filter((x) => x.recurring_group_id === b.recurring_group_id).sort((a, b2) => a.start_time.localeCompare(b2.start_time));
+    const idx = group.findIndex((x) => x.id === b.id) + 1;
+    recurringSession = { index: idx, total: group.length };
+  }
+  return {
+    id: b.id,
+    event_type_id: b.event_type_id,
+    event_type_name: et ? et.name : null,
+    start_time: b.start_time,
+    end_time: b.end_time,
+    first_name: b.first_name,
+    last_name: b.last_name,
+    full_name: `${b.first_name || ''} ${b.last_name || ''}`.trim(),
+    email: b.email,
+    phone: b.phone,
+    recurring_group_id: b.recurring_group_id,
+    recurring_session: recurringSession,
+    notes: b.notes || '',
+  };
+}
+
+// GET /api/bookings/:id - get one booking (for event edit page)
+router.get('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const b = await store.bookings.getById(id);
+    if (!b) return res.status(404).json({ error: 'Booking not found' });
+    const list = await store.bookings.list();
+    const eventTypes = await store.eventTypes.all();
+    const enriched = await enrichBooking(b, list, eventTypes);
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/bookings/:id - update one booking
+router.patch('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await store.bookings.getById(id);
+    if (!existing) return res.status(404).json({ error: 'Booking not found' });
+    const { startTime, endTime, firstName, lastName, email, phone, notes } = req.body;
+    if (firstName !== undefined && !firstName) return res.status(400).json({ error: 'firstName required' });
+    if (lastName !== undefined && !lastName) return res.status(400).json({ error: 'lastName required' });
+    if (email !== undefined && !email) return res.status(400).json({ error: 'email required' });
+
+    let start_time = existing.start_time;
+    let end_time = existing.end_time;
+    if (startTime !== undefined) {
+      const norm = startTime.replace(' ', 'T').substring(0, 19);
+      start_time = norm.replace('T', ' ');
+      const eventType = await store.eventTypes.getById(existing.event_type_id);
+      const duration = eventType ? (eventType.durationMinutes || 30) : 30;
+      end_time = addMinutes(start_time, duration);
+    }
+    if (endTime !== undefined) end_time = endTime.replace(' ', 'T').substring(0, 19).replace('T', ' ');
+
+    if (start_time !== existing.start_time || end_time !== existing.end_time) {
+      const overlap = await store.bookings.findOverlappingExcluding(Number(id), start_time, end_time);
+      if (overlap) {
+        return res.status(409).json({ error: 'Slot no longer available', conflictingStart: start_time });
+      }
+    }
+
+    const data = {
+      first_name: firstName !== undefined ? firstName : existing.first_name,
+      last_name: lastName !== undefined ? lastName : existing.last_name,
+      email: email !== undefined ? email : existing.email,
+      phone: phone !== undefined ? phone : existing.phone,
+      start_time,
+      end_time,
+      notes: notes !== undefined ? notes : existing.notes,
+    };
+    const updated = await store.bookings.update(id, data);
+    const list = await store.bookings.list();
+    const eventTypes = await store.eventTypes.all();
+    const enriched = await enrichBooking(updated, list, eventTypes);
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/bookings/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await store.bookings.getById(id);
+    if (!existing) return res.status(404).json({ error: 'Booking not found' });
+    await store.bookings.delete(id);
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

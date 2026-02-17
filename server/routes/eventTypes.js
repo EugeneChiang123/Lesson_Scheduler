@@ -38,7 +38,7 @@ router.get('/:slug', async (req, res) => {
 // POST /api/event-types - create
 router.post('/', async (req, res) => {
   try {
-    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
+    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location } = req.body;
     if (!slug || !name) return res.status(400).json({ error: 'slug and name required' });
     const row = await store.eventTypes.create({
       slug,
@@ -48,6 +48,7 @@ router.post('/', async (req, res) => {
       allowRecurring: Boolean(allowRecurring),
       recurringCount: recurringCount ?? 1,
       availability: availability || [],
+      location: location != null ? location : '',
     });
     res.status(201).json(row);
   } catch (err) {
@@ -62,7 +63,7 @@ router.patch('/:id', async (req, res) => {
     const id = req.params.id;
     const existing = await store.eventTypes.getById(id);
     if (!existing) return res.status(404).json({ error: 'Event type not found' });
-    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
+    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location } = req.body;
     const updated = await store.eventTypes.update(id, {
       slug,
       name,
@@ -71,6 +72,7 @@ router.patch('/:id', async (req, res) => {
       allowRecurring,
       recurringCount,
       availability,
+      location,
     });
     res.json(updated);
   } catch (err) {
