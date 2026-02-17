@@ -14,7 +14,7 @@ Use Postgres so event types and bookings persist across serverless requests (fix
 2. In the project, open **Storage** (or **Integrations** / **Marketplace**).
 3. Click **Create Database** or **Add Integration** and choose **Postgres**.
 4. Pick a provider (e.g. **Neon**), then **Connect** or **Add to Project** and link this Vercel project.
-5. After the integration is added, Vercel will add environment variables to the project (e.g. `POSTGRES_URL` or `DATABASE_URL`). You can see them under **Settings → Environment Variables**.
+5. After the integration is added, Vercel will add environment variables to the project (e.g. `POSTGRES_URL` or `DATABASE_URL`). You can see them under **Settings → Environment Variables**. The app uses either variable for the connection, so if Neon only sets `DATABASE_URL`, you do not need to add `POSTGRES_URL`.
 
 ---
 
@@ -30,7 +30,7 @@ You need the same URL locally so you can run the migration and (optionally) run 
    POSTGRES_URL=postgresql://...paste the URL here...
    ```
 
-   If the integration only created `DATABASE_URL`, use that name instead; the app supports both:
+   The app reads **either** `POSTGRES_URL` or `DATABASE_URL` (same connection string). If the integration only created `DATABASE_URL` (common with Neon), that alone is enough—no need to add `POSTGRES_URL`:
 
    ```
    DATABASE_URL=postgresql://...
@@ -84,4 +84,4 @@ Run this from the project root with `POSTGRES_URL` (or `DATABASE_URL`) in your `
 - **On Vercel:** Create an event type in the setup UI, then open its booking link in a new window. The booking page should load (no 404).
 - **Locally:** With `.env` set and `npm run dev`, create an event type and open the booking link in a new tab; it should load.
 
-The app automatically uses Postgres when `POSTGRES_URL` or `DATABASE_URL` is set; no code changes are required.
+The app automatically uses Postgres when `POSTGRES_URL` or `DATABASE_URL` is set. It connects using the `pg` driver and either variable, so a single URL (e.g. Neon’s `DATABASE_URL`) is sufficient.

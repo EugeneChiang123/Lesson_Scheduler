@@ -69,8 +69,14 @@ export default function Book() {
   const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Book.jsx:fetch event-type',message:'Book page loading',data:{eventTypeSlug},timestamp:Date.now(),hypothesisId:'B_C'})}).catch(()=>{});
+    // #endregion
     fetch(`${API}/event-types/${eventTypeSlug}`)
       .then(async (r) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Book.jsx:event-type response',message:'API response',data:{ok:r.ok,status:r.status,eventTypeSlug},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         if (r.ok) return r.json();
         const body = await r.json().catch(() => ({}));
         const msg = body.error || `Request failed (${r.status})`;
@@ -125,6 +131,9 @@ export default function Book() {
 
   if (loading) return <div style={styles.page}>Loading…</div>;
   if (error) {
+    // #region agent log
+    if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Book.jsx:render',message:'Book showing error state',data:{eventTypeSlug,error},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     return (
       <div style={styles.page}>
         <div style={styles.card}>
