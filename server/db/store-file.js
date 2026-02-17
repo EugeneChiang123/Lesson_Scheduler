@@ -38,6 +38,12 @@ async function withBookingMutex(eventTypeId, fn) {
   }
 }
 
+/** Global mutex for PATCH update: overlap check and write must be atomic with all other booking writes. */
+const GLOBAL_BOOKING_MUTEX_KEY = Symbol('global');
+async function withGlobalBookingMutex(fn) {
+  return withBookingMutex(GLOBAL_BOOKING_MUTEX_KEY, fn);
+}
+
 function clampRecurringCount(n) {
   const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
   return Math.min(MAX_RECURRING_COUNT, Math.max(1, val));
@@ -226,6 +232,45 @@ const store = {
       writeBookings(list);
       return Promise.resolve(normalizeBooking(updated));
     },
+    /**
+     * Atomically check for overlaps then update (under global mutex). Prevents double-booking
+     * when a concurrent POST or PATCH could insert/move into the same slot.
+     * @returns {Promise<{ updated: object } | { notFound: true } | { conflict: true, conflictingStart: string }>}
+     */
+    async updateIfNoConflict(id, data) {
+      return withGlobalBookingMutex(() => {
+        const list = readBookings();
+        const idx = list.findIndex((b) => b.id === Number(id));
+        if (idx === -1) return Promise.resolve({ notFound: true });
+        const row = list[idx];
+        const start_time = data.start_time !== undefined ? data.start_time : row.start_time;
+        const end_time = data.end_time !== undefined ? data.end_time : row.end_time;
+        const start = start_time.replace(' ', 'T');
+        const end = end_time.replace(' ', 'T');
+        const overlapping = list.find((b) => {
+          if (b.id === Number(id)) return false;
+          const bStart = b.start_time.replace(' ', 'T');
+          const bEnd = b.end_time.replace(' ', 'T');
+          return start < bEnd && end > bStart;
+        });
+        if (overlapping) return Promise.resolve({ conflict: true, conflictingStart: overlapping.start_time });
+        const duration_minutes = data.duration_minutes !== undefined ? data.duration_minutes : (row.duration_minutes != null ? row.duration_minutes : deriveDurationMinutes(row.start_time, row.end_time));
+        const updated = {
+          ...row,
+          first_name: data.first_name !== undefined ? data.first_name : row.first_name,
+          last_name: data.last_name !== undefined ? data.last_name : row.last_name,
+          email: data.email !== undefined ? data.email : row.email,
+          phone: data.phone !== undefined ? data.phone : row.phone,
+          start_time,
+          end_time,
+          notes: data.notes !== undefined ? data.notes : (row.notes ?? ''),
+          duration_minutes,
+        };
+        list[idx] = updated;
+        writeBookings(list);
+        return Promise.resolve({ updated: normalizeBooking(updated) });
+      });
+    },
     delete(id) {
       const list = readBookings();
       const idx = list.findIndex((b) => b.id === Number(id));
@@ -236,15 +281,15 @@ const store = {
     },
 
     /**
-     * Atomically check for overlaps and insert all slots under a mutex per event type.
-     * Prevents two concurrent requests from double-booking the same slot.
+     * Atomically check for overlaps and insert all slots under global booking mutex.
+     * Prevents two concurrent requests (POST or PATCH) from double-booking the same slot.
      * @param {number} eventTypeId
      * @param {{ start_time: string, end_time: string }[]} slots
      * @param {{ first_name: string, last_name: string, email: string, phone?: string, recurring_group_id?: string }} guest
      * @returns {Promise<{ created: object[] } | { conflict: true, conflictingStart: string }>}
      */
     async createBatchIfNoConflict(eventTypeId, slots, guest) {
-      return withBookingMutex(eventTypeId, () => {
+      return withGlobalBookingMutex(() => {
         const list = readBookings();
         for (const slot of slots) {
           const start = slot.start_time.replace(' ', 'T');

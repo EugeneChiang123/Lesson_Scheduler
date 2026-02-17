@@ -95,16 +95,6 @@ router.patch('/:id', async (req, res) => {
       duration_minutes = Math.max(1, computed) || existingDuration;
     }
 
-    if (start_time !== existing.start_time || end_time !== existing.end_time) {
-      const overlap = await store.bookings.findOverlappingExcluding(Number(id), start_time, end_time);
-      if (overlap) {
-        return res.status(409).json({
-          error: 'This time would overlap with another lesson',
-          conflictingStart: overlap.start_time,
-        });
-      }
-    }
-
     const data = {
       first_name: firstName !== undefined ? firstName : existing.first_name,
       last_name: lastName !== undefined ? lastName : existing.last_name,
@@ -115,7 +105,15 @@ router.patch('/:id', async (req, res) => {
       duration_minutes,
       notes: notes !== undefined ? notes : existing.notes,
     };
-    const updated = await store.bookings.update(id, data);
+    const result = await store.bookings.updateIfNoConflict(id, data);
+    if (result.notFound) return res.status(404).json({ error: 'Booking not found' });
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'This time would overlap with another lesson',
+        conflictingStart: result.conflictingStart,
+      });
+    }
+    const updated = result.updated;
     const list = await store.bookings.list();
     const eventTypes = await store.eventTypes.all();
     const enriched = enrichBooking(updated, list, eventTypes);

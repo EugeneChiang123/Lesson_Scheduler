@@ -11,6 +11,9 @@ const pool = new Pool({ connectionString });
 
 const MAX_RECURRING_COUNT = 52;
 
+/** Advisory lock key for serializing all booking writes (POST and PATCH) to prevent double-booking. */
+const BOOKING_WRITE_LOCK_ID = 0x4c455353; // 'LESS' in hex
+
 function clampRecurringCount(n) {
   const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
   return Math.min(MAX_RECURRING_COUNT, Math.max(1, val));
@@ -213,14 +216,64 @@ const store = {
       );
       return store.bookings.getById(id);
     },
+    /**
+     * Atomically check for overlaps then update (in a transaction with advisory lock).
+     * Prevents double-booking when a concurrent POST or PATCH could insert/move into the same slot.
+     * @returns {Promise<{ updated: object } | { notFound: true } | { conflict: true, conflictingStart: string }>}
+     */
+    async updateIfNoConflict(id, data) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock($1)', [BOOKING_WRITE_LOCK_ID]);
+        const { rows: existingRows } = await client.query('SELECT * FROM bookings WHERE id = $1', [Number(id)]);
+        if (existingRows.length === 0) {
+          await client.query('ROLLBACK');
+          return { notFound: true };
+        }
+        const existing = toBooking(existingRows[0]);
+        const start_time = data.start_time !== undefined ? data.start_time : existing.start_time;
+        const end_time = data.end_time !== undefined ? data.end_time : existing.end_time;
+        const start = start_time.replace(' ', 'T').substring(0, 19);
+        const end = end_time.replace(' ', 'T').substring(0, 19);
+        const { rows: overlapping } = await client.query(
+          'SELECT * FROM bookings WHERE id != $1 AND start_time < $2::timestamptz AND end_time > $3::timestamptz LIMIT 1',
+          [Number(id), end, start]
+        );
+        if (overlapping.length > 0) {
+          await client.query('ROLLBACK');
+          return { conflict: true, conflictingStart: formatTs(overlapping[0].start_time) };
+        }
+        const first_name = data.first_name !== undefined ? data.first_name : existing.first_name;
+        const last_name = data.last_name !== undefined ? data.last_name : existing.last_name;
+        const email = data.email !== undefined ? data.email : existing.email;
+        const phone = data.phone !== undefined ? data.phone : existing.phone;
+        const notes = data.notes !== undefined ? data.notes : existing.notes;
+        const duration_minutes = data.duration_minutes !== undefined ? data.duration_minutes : existing.duration_minutes;
+        await client.query(
+          `UPDATE bookings
+           SET first_name = $1, last_name = $2, email = $3, phone = $4, start_time = $5::timestamptz, end_time = $6::timestamptz, notes = $7, duration_minutes = $8
+           WHERE id = $9`,
+          [first_name, last_name, email, phone || null, start_time, end_time, notes || '', duration_minutes, Number(id)]
+        );
+        await client.query('COMMIT');
+        const updated = await store.bookings.getById(id);
+        return { updated };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
     async delete(id) {
       const { rowCount } = await pool.query('DELETE FROM bookings WHERE id = $1', [Number(id)]);
       return rowCount > 0;
     },
 
     /**
-     * Atomically check for overlaps and insert all slots under a transaction with row lock.
-     * Prevents two concurrent requests from double-booking the same slot.
+     * Atomically check for overlaps and insert all slots under a transaction with advisory lock.
+     * Prevents two concurrent requests (POST or PATCH) from double-booking the same slot.
      * @param {number} eventTypeId
      * @param {{ start_time: string, end_time: string }[]} slots
      * @param {{ first_name: string, last_name: string, email: string, phone?: string, recurring_group_id?: string }} guest
@@ -230,6 +283,7 @@ const store = {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock($1)', [BOOKING_WRITE_LOCK_ID]);
         const { rows: locked } = await client.query('SELECT id FROM event_types WHERE id = $1 FOR UPDATE', [eventTypeId]);
         if (locked.length === 0) {
           await client.query('ROLLBACK');
