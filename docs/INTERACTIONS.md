@@ -14,6 +14,7 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | `/setup/new` | InstructorLayout | **SetupEventForm** (create) |
 | `/setup/:id/edit` | InstructorLayout | **SetupEventForm** (edit) |
 | `/setup/bookings` | InstructorLayout | **BookingsCalendar** |
+| `/setup/bookings/:bookingId` | InstructorLayout | **EventEditPage** |
 | `*` | — | Redirect to `/` |
 
 ---
@@ -26,6 +27,7 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | **SetupEventForm** | `GET /api/event-types/id/:id` (edit only), `POST /api/event-types` (create), `PATCH /api/event-types/:id` (update) |
 | **Book** | `GET /api/event-types/:slug`, `GET /api/event-types/:slug/slots?date=YYYY-MM-DD`, `POST /api/bookings` |
 | **BookingsCalendar** | `GET /api/bookings` |
+| **EventEditPage** | `GET /api/bookings/:id`, `PATCH /api/bookings/:id`, `DELETE /api/bookings/:id` |
 
 ---
 
@@ -104,6 +106,55 @@ sequenceDiagram
     API-->>SetupForm: 200 + event type
     SetupForm-->>User: Navigate to /setup
   end
+```
+
+---
+
+## Instructor calendar and booking edit flow
+
+Instructor goes to `/setup/bookings` to see all upcoming lessons, then clicks one to adjust time, duration, or details, with conflict checks enforced by the API.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Calendar as BookingsCalendar.jsx
+  participant EditPage as EventEditPage.jsx
+  participant API as Express API
+  participant Store as Store
+
+  User->>Calendar: Open /setup/bookings
+  Calendar->>API: GET /api/bookings
+  API->>Store: bookings.list(), eventTypes.all()
+  Store-->>API: list + event types
+  API-->>Calendar: enriched bookings (event_type_name, full_name, recurring_session, notes, duration_minutes)
+  Calendar-->>User: Month/week/day calendar with lessons
+
+  User->>Calendar: Click a lesson
+  Calendar->>EditPage: Navigate to /setup/bookings/:bookingId
+  EditPage->>API: GET /api/bookings/:id
+  API->>Store: bookings.getById()
+  Store-->>API: booking
+  API-->>EditPage: enriched booking
+  EditPage-->>User: Edit form (date, time, duration, contact info, notes)
+
+  User->>EditPage: Save changes
+  EditPage->>API: PATCH /api/bookings/:id
+  API->>Store: bookings.updateIfNoConflict(...)
+  Store-->>API: updated or conflict
+  alt No conflict
+    API-->>EditPage: 200 updated booking
+    EditPage-->>User: Navigate back to /setup/bookings
+  else Conflict
+    API-->>EditPage: 409 with conflictingStart
+    EditPage-->>User: Show "overlaps with another lesson" message
+  end
+
+  User->>EditPage: Delete lesson
+  EditPage->>API: DELETE /api/bookings/:id
+  API->>Store: bookings.delete()
+  Store-->>API: success
+  API-->>EditPage: 204 No Content
+  EditPage-->>User: Navigate back to /setup/bookings
 ```
 
 ---
