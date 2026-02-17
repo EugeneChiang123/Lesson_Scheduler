@@ -11,6 +11,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// So you can verify on Vercel: GET /api/health → { store: "postgres" | "file" }
+app.get('/api/health', (req, res) => {
+  const url = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  res.json({ store: url ? 'postgres' : 'file' });
+});
+
 app.use('/api/event-types', slotsRouter);
 app.use('/api/event-types', eventTypesRouter);
 app.use('/api/bookings', bookingsRouter);
