@@ -70,6 +70,7 @@ One-place reference for what each important file does and how it fits in. For da
 | **docs/POSTGRES_SETUP.md** | Step-by-step Postgres on Vercel (e.g. Neon), env vars, migration, redeploy. |
 | **docs/API.md** | Full API reference: every endpoint, request/response shapes, errors. |
 | **docs/INTERACTIONS.md** | Route → page map, page → API map, and flow diagrams (student booking, instructor setup, client–server). |
+| **docs/MVP_MITIGATION_QUESTIONS.md** | MVP gap mitigation: step-by-step questions with answer placeholders; answer in-doc then use as implementation spec. |
 | **planning.md** | Product vision, implementation order, Postgres rollout, risk and rollback (reference). |
 
 ---
