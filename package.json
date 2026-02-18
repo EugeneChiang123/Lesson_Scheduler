@@ -19,7 +19,8 @@
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
     "luxon": "^3.7.2",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "resend": "^6.9.2"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"
