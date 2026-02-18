@@ -1,21 +1,23 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { theme } from '../styles/theme';
+import { getBasePath } from '../utils/basePath';
 
 export default function InstructorLayout() {
   const location = useLocation();
   const path = location.pathname;
+  const basePath = getBasePath(path);
 
-  const isScheduling = path === '/setup' || path.startsWith('/setup/new') || path.includes('/edit');
-  const isBookings = path === '/setup/bookings';
+  const isScheduling = path === basePath || path.startsWith(`${basePath}/new`) || path.includes('/edit');
+  const isBookings = path === `${basePath}/bookings`;
 
   return (
     <div style={styles.container}>
       <aside style={styles.sidebar}>
         <Link to="/" style={styles.brand}>Lesson Scheduler</Link>
-        <Link to="/setup/new" style={styles.createBtn}>+ Create</Link>
+        <Link to={`${basePath}/new`} style={styles.createBtn}>+ Create</Link>
         <nav style={styles.nav}>
           <Link
-            to="/setup"
+            to={basePath}
             style={{
               ...styles.navItem,
               ...(isScheduling ? styles.navItemActive : {}),
@@ -25,7 +27,7 @@ export default function InstructorLayout() {
             Scheduling
           </Link>
           <Link
-            to="/setup/bookings"
+            to={`${basePath}/bookings`}
             style={{
               ...styles.navItem,
               ...(isBookings ? styles.navItemActive : {}),

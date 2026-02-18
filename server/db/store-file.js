@@ -125,10 +125,21 @@ const store = {
     insert() {
       return Promise.reject(new Error('Auth requires Postgres'));
     },
+    getRedirect() {
+      return Promise.resolve(null);
+    },
   },
   eventTypes: {
-    all() {
-      return Promise.resolve(readEventTypes());
+    all(professional_id) {
+      const list = readEventTypes();
+      if (professional_id != null) {
+        const pid = Number(professional_id);
+        const filtered = list.filter(
+          (e) => Number(e.professional_id ?? e.professionalId) === pid
+        );
+        return Promise.resolve(filtered);
+      }
+      return Promise.resolve(list);
     },
     getBySlug(slug) {
       return Promise.resolve(readEventTypes().find((e) => e.slug === slug) || null);
@@ -143,6 +154,7 @@ const store = {
       if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationMinutes must be a positive number');
       const row = {
         id: eventTypeId++,
+        professional_id: data.professional_id != null ? Number(data.professional_id) : null,
         slug: data.slug,
         name: data.name,
         description: data.description || '',
@@ -181,8 +193,19 @@ const store = {
     },
   },
   bookings: {
-    list() {
+    list(professional_id) {
       const list = readBookings();
+      if (professional_id != null) {
+        const eventTypes = readEventTypes();
+        const pid = Number(professional_id);
+        const eventTypeIds = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === pid)
+            .map((e) => e.id)
+        );
+        const filtered = list.filter((b) => eventTypeIds.has(Number(b.event_type_id)));
+        return Promise.resolve(filtered.map(normalizeBooking));
+      }
       return Promise.resolve(list.map(normalizeBooking));
     },
     getById(id) {

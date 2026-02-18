@@ -15,6 +15,8 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | `/setup/:id/edit` | InstructorLayout | **SetupEventForm** (edit) |
 | `/setup/bookings` | InstructorLayout | **BookingsCalendar** |
 | `/setup/bookings/:bookingId` | InstructorLayout | **EventEditPage** |
+| `/:professionalSlug` | ProtectedRoute → ProfessionalSlugGuard → InstructorLayout | Same as `/setup` (Scheduling + Bookings) when slug is current user’s profile slug; reserved slug → redirect to `/setup`; old slug → redirect to current slug |
+| `/:professionalSlug/new`, `/:professionalSlug/bookings`, etc. | (as above) | **SetupEventForm**, **BookingsCalendar**, **EventEditPage** (same as under `/setup`) |
 | `*` | — | Redirect to `/` |
 
 ---
@@ -28,6 +30,7 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | **Book** | `GET /api/event-types/:slug`, `GET /api/event-types/:slug/slots?date=YYYY-MM-DD`, `POST /api/bookings` |
 | **BookingsCalendar** | `GET /api/bookings` |
 | **EventEditPage** | `GET /api/bookings/:id`, `PATCH /api/bookings/:id`, `DELETE /api/bookings/:id` |
+| **ProfessionalSlugGuard** | `GET /api/professionals/me`, `GET /api/professionals/by-slug/:slug` (public, for redirect resolution) |
 
 ---
 

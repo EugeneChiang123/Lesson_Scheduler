@@ -1,16 +1,44 @@
 /**
- * Professionals API: GET /me, PATCH /me.
- * All routes require auth (requireProfessional middleware applied in app.js).
+ * Professionals API: GET /me, PATCH /me (auth required).
+ * Public: GET /by-slug/:slug, GET /reserved-slugs (mounted without auth in app.js).
  */
 const express = require('express');
 const store = require('../db/store');
 
 const router = express.Router();
 
+/** Reserved path segments; used for profile_slug validation and client route guard. */
 const RESERVED_SLUGS = new Set([
   'book', 'setup', 'api', 'auth', 'sign-in', 'sign-up', 'health', 'login', 'logout',
   'signin', 'signup', 'new', 'edit', 'bookings',
 ]);
+
+/** Public router: no auth. Mount first under /api/professionals. */
+const publicRouter = express.Router();
+
+/** GET /api/professionals/reserved-slugs - list reserved path segments */
+publicRouter.get('/reserved-slugs', (req, res) => {
+  res.json({ slugs: [...RESERVED_SLUGS] });
+});
+
+/** GET /api/professionals/by-slug/:slug - resolve slug for redirect or dashboard */
+publicRouter.get('/by-slug/:slug', async (req, res) => {
+  try {
+    const slug = String(req.params.slug || '').trim().toLowerCase();
+    if (!slug) return res.status(404).json({ error: 'Not found' });
+    if (RESERVED_SLUGS.has(slug)) return res.status(404).json({ error: 'Reserved path' });
+
+    const redirectTo = await store.slug_redirects.getRedirect(slug);
+    if (redirectTo) return res.json({ redirectTo: `/${redirectTo}` });
+
+    const pro = await store.professionals.getByProfileSlug(slug);
+    if (pro) return res.json({ profileSlug: pro.profileSlug });
+
+    return res.status(404).json({ error: 'Not found' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /** GET /api/professionals/me - current professional */
 router.get('/me', (req, res) => {
@@ -68,3 +96,4 @@ router.patch('/me', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.publicRouter = publicRouter;

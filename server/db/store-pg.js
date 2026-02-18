@@ -161,6 +161,16 @@ const store = {
         [data.old_slug, Number(data.professional_id)]
       );
     },
+    /** Resolve old_slug to current profile_slug for redirect. Returns null if not found. */
+    async getRedirect(old_slug) {
+      const { rows } = await pool.query(
+        `SELECT p.profile_slug FROM slug_redirects r
+         JOIN professionals p ON p.id = r.professional_id
+         WHERE r.old_slug = $1`,
+        [old_slug]
+      );
+      return rows[0] ? rows[0].profile_slug : null;
+    },
   },
   eventTypes: {
     async all(professional_id) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { theme } from '../styles/theme';
+import { getBasePath } from '../utils/basePath';
 import { useApi } from '../api';
 
 function parseDateTime(startTime, endTime) {
@@ -16,6 +17,9 @@ function parseDateTime(startTime, endTime) {
 export default function EventEditPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = getBasePath(location.pathname);
+  const bookingsPath = `${basePath}/bookings`;
   const { apiFetch } = useApi();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +49,7 @@ export default function EventEditPage() {
       })
       .then((data) => {
         if (!data) {
-          navigate('/setup/bookings', { replace: true });
+          navigate(bookingsPath, { replace: true });
           return;
         }
         setBooking(data);
@@ -63,7 +67,7 @@ export default function EventEditPage() {
         });
         setOverlapError(null);
       })
-      .catch(() => navigate('/setup/bookings', { replace: true }))
+      .catch(() => navigate(bookingsPath, { replace: true }))
       .finally(() => setLoading(false));
   }, [bookingId, navigate, apiFetch]);
 
@@ -109,7 +113,7 @@ export default function EventEditPage() {
         }
         return r.json();
       })
-      .then(() => navigate('/setup/bookings'))
+      .then(() => navigate(bookingsPath))
       .catch((e) => {
         if (e.status === 409) {
           setOverlapError(e.error || 'This time would overlap with another lesson. Try a shorter duration or a different time.');
@@ -151,7 +155,7 @@ export default function EventEditPage() {
       .then((r) => {
         if (!r.ok) return r.json().then((d) => Promise.reject(new Error(d.error || 'Failed')));
       })
-      .then(() => navigate('/setup/bookings'))
+      .then(() => navigate(bookingsPath))
       .catch((e) => {
         alert(e.message);
         setDeleting(false);
@@ -257,7 +261,7 @@ export default function EventEditPage() {
           <button type="button" style={styles.primaryBtn} onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <Link to="/setup/bookings" style={styles.cancelLink}>Cancel</Link>
+          <Link to={bookingsPath} style={styles.cancelLink}>Cancel</Link>
         </div>
 
         <div style={styles.deleteSection}>

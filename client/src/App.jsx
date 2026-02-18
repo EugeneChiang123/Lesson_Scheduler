@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Book from './pages/Book';
 import InstructorLayout from './components/InstructorLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ProfessionalSlugGuard from './components/ProfessionalSlugGuard';
 import SetupHome from './pages/SetupHome';
 import SetupEventForm from './pages/SetupEventForm';
 import BookingsCalendar from './pages/BookingsCalendar';
@@ -29,6 +30,22 @@ export default function App() {
         <Route path="bookings" element={<BookingsCalendar />} />
         <Route path="new" element={<SetupEventForm />} />
         <Route path=":id/edit" element={<SetupEventForm />} />
+      </Route>
+      <Route
+        path="/:professionalSlug"
+        element={
+          <ProtectedRoute>
+            <ProfessionalSlugGuard />
+          </ProtectedRoute>
+        }
+      >
+        <Route element={<InstructorLayout />}>
+          <Route index element={<SetupHome />} />
+          <Route path="bookings/:bookingId" element={<EventEditPage />} />
+          <Route path="bookings" element={<BookingsCalendar />} />
+          <Route path="new" element={<SetupEventForm />} />
+          <Route path=":id/edit" element={<SetupEventForm />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

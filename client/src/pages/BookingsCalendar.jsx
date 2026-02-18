@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { getBasePath } from '../utils/basePath';
 import { useApi } from '../api';
 
 function EventHoverCard({ booking, x, y }) {
@@ -59,6 +60,8 @@ function getEndOfDay(d) {
 
 export default function BookingsCalendar() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = getBasePath(location.pathname);
   const { apiFetch } = useApi();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -157,7 +160,7 @@ export default function BookingsCalendar() {
           getBookingsForDay={getBookingsForDay}
           onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
           onEventLeave={() => setHoverState(null)}
-          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+          onEventClick={(b) => navigate(`${basePath}/bookings/${b.id}`)}
         />
       )}
       {viewMode === 'week' && (
@@ -166,7 +169,7 @@ export default function BookingsCalendar() {
           bookings={getBookingsForWeek()}
           onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
           onEventLeave={() => setHoverState(null)}
-          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+          onEventClick={(b) => navigate(`${basePath}/bookings/${b.id}`)}
         />
       )}
       {viewMode === 'day' && (
@@ -175,7 +178,7 @@ export default function BookingsCalendar() {
           bookings={getBookingsForDayView()}
           onEventHover={(b, e) => setHoverState({ booking: b, x: e.clientX, y: e.clientY })}
           onEventLeave={() => setHoverState(null)}
-          onEventClick={(b) => navigate(`/setup/bookings/${b.id}`)}
+          onEventClick={(b) => navigate(`${basePath}/bookings/${b.id}`)}
         />
       )}
       {hoverState && (

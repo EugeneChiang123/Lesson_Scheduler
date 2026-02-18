@@ -34,7 +34,32 @@ or
 
 ## Professionals
 
-Base path: `/api/professionals`. All routes require auth (`Authorization: Bearer <token>`).
+Base path: `/api/professionals`. Public routes (no auth): `GET /reserved-slugs`, `GET /by-slug/:slug`. All other routes require auth (`Authorization: Bearer <token>`).
+
+### GET /api/professionals/reserved-slugs
+
+Returns reserved path segments that cannot be used as profile slugs. No auth.
+
+**Response:** `200 OK`
+
+```json
+{ "slugs": ["book", "setup", "api", "auth", "sign-in", "sign-up", "health", "login", "logout", "signin", "signup", "new", "edit", "bookings"] }
+```
+
+---
+
+### GET /api/professionals/by-slug/:slug
+
+Resolves a URL slug for redirect or dashboard. No auth. Used when loading `/:professionalSlug` to decide whether to redirect (old slug) or show dashboard (current slug).
+
+**Response:** `200 OK`
+
+- If `slug` is an old slug (in `slug_redirects`): `{ "redirectTo": "/currentSlug" }` — client should navigate to `redirectTo`.
+- If `slug` is a current profile slug: `{ "profileSlug": "slug" }`.
+
+**Errors:** `404` — slug not found, reserved, or empty.
+
+---
 
 ### GET /api/professionals/me
 

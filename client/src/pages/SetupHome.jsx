@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { theme } from '../styles/theme';
 import { formatAvailability } from '../utils/formatAvailability';
 import { formatDuration } from '../utils/formatDuration';
+import { getBasePath } from '../utils/basePath';
 import { useApi } from '../api';
 
 export default function SetupHome() {
+  const location = useLocation();
+  const basePath = getBasePath(location.pathname);
   const { apiFetch } = useApi();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +60,7 @@ export default function SetupHome() {
             onChange={(e) => setSearch(e.target.value)}
             style={styles.search}
           />
-          <Link to="/setup/new" style={styles.createBtn}>+ Create</Link>
+          <Link to={`${basePath}/new`} style={styles.createBtn}>+ Create</Link>
         </div>
       </div>
 
@@ -81,7 +84,7 @@ export default function SetupHome() {
               Clear search
             </button>
           ) : (
-            <Link to="/setup/new" style={styles.createLink}>
+            <Link to={`${basePath}/new`} style={styles.createLink}>
               Create your first event
             </Link>
           )}
@@ -136,7 +139,7 @@ export default function SetupHome() {
                   {menuOpen === et.id && (
                     <div style={styles.menu} onClick={(e) => e.stopPropagation()}>
                       <Link
-                        to={`/setup/${et.id}/edit`}
+                        to={`${basePath}/${et.id}/edit`}
                         style={styles.menuItem}
                         onClick={closeMenu}
                       >
