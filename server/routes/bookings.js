@@ -32,11 +32,12 @@ function enrichBooking(b, list, eventTypes) {
   };
 }
 
-// GET /api/bookings - list all (for instructor calendar)
+// GET /api/bookings - list all for current professional (for instructor calendar)
 router.get('/', async (req, res) => {
   try {
-    const list = await store.bookings.list();
-    const eventTypes = await store.eventTypes.all();
+    const professionalId = req.professionalId;
+    const list = await store.bookings.list(professionalId);
+    const eventTypes = await store.eventTypes.all(professionalId);
     const enriched = list.map((b) => enrichBooking(b, list, eventTypes));
     const sorted = enriched.sort((a, b) => a.start_time.localeCompare(b.start_time));
     res.json(sorted);
@@ -51,8 +52,12 @@ router.get('/:id', async (req, res) => {
     const id = req.params.id;
     const b = await store.bookings.getById(id);
     if (!b) return res.status(404).json({ error: 'Booking not found' });
-    const list = await store.bookings.list();
-    const eventTypes = await store.eventTypes.all();
+    const et = await store.eventTypes.getById(b.event_type_id);
+    if (req.professionalId != null && et && et.professionalId !== req.professionalId) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    const list = await store.bookings.list(req.professionalId);
+    const eventTypes = await store.eventTypes.all(req.professionalId);
     const enriched = enrichBooking(b, list, eventTypes);
     res.json(enriched);
   } catch (err) {
@@ -66,6 +71,10 @@ router.patch('/:id', async (req, res) => {
     const id = req.params.id;
     const existing = await store.bookings.getById(id);
     if (!existing) return res.status(404).json({ error: 'Booking not found' });
+    const et = await store.eventTypes.getById(existing.event_type_id);
+    if (req.professionalId != null && et && et.professionalId !== req.professionalId) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
     const { startTime, endTime, durationMinutes, firstName, lastName, email, phone, notes } = req.body;
     if (firstName !== undefined && !firstName) return res.status(400).json({ error: 'firstName required' });
     if (lastName !== undefined && !lastName) return res.status(400).json({ error: 'lastName required' });
@@ -120,8 +129,8 @@ router.patch('/:id', async (req, res) => {
       });
     }
     const updated = result.updated;
-    const list = await store.bookings.list();
-    const eventTypes = await store.eventTypes.all();
+    const list = await store.bookings.list(req.professionalId);
+    const eventTypes = await store.eventTypes.all(req.professionalId);
     const enriched = enrichBooking(updated, list, eventTypes);
     res.json(enriched);
   } catch (err) {
@@ -135,6 +144,10 @@ router.delete('/:id', async (req, res) => {
     const id = req.params.id;
     const existing = await store.bookings.getById(id);
     if (!existing) return res.status(404).json({ error: 'Booking not found' });
+    const et = await store.eventTypes.getById(existing.event_type_id);
+    if (req.professionalId != null && et && et.professionalId !== req.professionalId) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
     await store.bookings.delete(id);
     res.status(204).send();
   } catch (err) {

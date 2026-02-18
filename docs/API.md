@@ -10,6 +10,7 @@ Single source of truth for the Lesson Scheduler REST API. All endpoints are unde
 - **Success responses:** JSON; status 200 (OK), 201 (Created) as noted per endpoint.
 - **Error responses:** JSON with `{ "error": "message" }`. Some endpoints add optional fields (e.g. `requestedStart`, `conflictingStart`) for conflict errors.
 - **Dates/times:** Dates as `YYYY-MM-DD`; times in API responses may use `YYYY-MM-DD HH:mm:ss` or ISO-like strings (e.g. `2026-02-20T09:00:00`).
+- **Auth:** Endpoints that require a logged-in professional expect the request header `Authorization: Bearer <token>` where the token is a Clerk session token. Missing or invalid token returns `401`. When using file store (no Postgres), auth endpoints return `503` (Auth requires Postgres).
 
 ---
 
@@ -31,13 +32,56 @@ or
 
 ---
 
+## Professionals
+
+Base path: `/api/professionals`. All routes require auth (`Authorization: Bearer <token>`).
+
+### GET /api/professionals/me
+
+Returns the current professional (resolved from Clerk token; created on first request if missing).
+
+**Response:** `200 OK`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | number | Primary key |
+| clerkUserId | string | Clerk user id |
+| email | string | |
+| fullName | string | |
+| profileSlug | string | URL slug for professional dashboard |
+| timeZone | string | IANA or offset (e.g. America/Los_Angeles) |
+| createdAt | string | |
+| updatedAt | string | |
+
+**Errors:** `401` — invalid or missing token. `404` — professional not found (should not occur after create-on-first). `503` — auth requires Postgres (file store in use).
+
+---
+
+### PATCH /api/professionals/me
+
+Update the current professional. Partial update; omit fields to leave unchanged.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| full_name | string | no | Display name |
+| profile_slug | string | no | URL slug (must not be reserved: book, setup, api, auth, sign-in, sign-up, health, login, logout, etc.) |
+| time_zone | string | no | IANA or offset |
+
+**Response:** `200 OK` — updated professional object (same shape as GET /me).
+
+**Errors:** `400` — reserved slug or invalid input. `401` — not authenticated. `409` — profile slug already in use. `503` — auth requires Postgres.
+
+---
+
 ## Event types
 
 Base path: `/api/event-types`.
 
 ### GET /api/event-types
 
-List all event types (instructor UI).
+List event types for the current professional (instructor UI). Requires auth.
 
 **Response:** `200 OK`
 

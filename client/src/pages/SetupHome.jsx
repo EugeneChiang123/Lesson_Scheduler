@@ -3,21 +3,21 @@ import { Link } from 'react-router-dom';
 import { theme } from '../styles/theme';
 import { formatAvailability } from '../utils/formatAvailability';
 import { formatDuration } from '../utils/formatDuration';
-
-const API = '/api';
+import { useApi } from '../api';
 
 export default function SetupHome() {
+  const { apiFetch } = useApi();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/event-types`)
+    apiFetch('/event-types')
       .then((r) => r.json())
       .then(setList)
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiFetch]);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const searchLower = search.trim().toLowerCase();

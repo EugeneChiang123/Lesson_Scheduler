@@ -33,6 +33,7 @@ function toEventType(row) {
   if (!row) return null;
   return {
     id: row.id,
+    professionalId: row.professional_id,
     slug: row.slug,
     name: row.name,
     description: row.description || '',
@@ -41,6 +42,23 @@ function toEventType(row) {
     recurringCount: row.recurring_count,
     availability: Array.isArray(row.availability) ? row.availability : (row.availability || []),
     location: row.location || '',
+    timeZone: row.time_zone || 'America/Los_Angeles',
+    priceDollars: row.price_dollars != null ? Number(row.price_dollars) : 0,
+  };
+}
+
+/** Map DB row to app professional (camelCase) */
+function toProfessional(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    clerkUserId: row.clerk_user_id,
+    email: row.email,
+    fullName: row.full_name || '',
+    profileSlug: row.profile_slug,
+    timeZone: row.time_zone || 'America/Los_Angeles',
+    createdAt: formatTs(row.created_at),
+    updatedAt: formatTs(row.updated_at),
   };
 }
 
@@ -61,6 +79,7 @@ function toBooking(row) {
   return {
     id: row.id,
     event_type_id: row.event_type_id,
+    client_id: row.client_id || null,
     start_time,
     end_time,
     first_name: row.first_name,
@@ -73,10 +92,82 @@ function toBooking(row) {
   };
 }
 
+/** Sanitize clerk_user_id for use as default profile_slug (valid path segment) */
+function sanitizeProfileSlug(s) {
+  return String(s).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100) || 'user';
+}
+
 const store = {
   clampRecurringCount,
+  professionals: {
+    async getByClerkId(clerk_user_id) {
+      const { rows } = await pool.query('SELECT * FROM professionals WHERE clerk_user_id = $1', [clerk_user_id]);
+      return toProfessional(rows[0] || null);
+    },
+    async getById(id) {
+      const { rows } = await pool.query('SELECT * FROM professionals WHERE id = $1', [Number(id)]);
+      return toProfessional(rows[0] || null);
+    },
+    async getByProfileSlug(profile_slug) {
+      const { rows } = await pool.query('SELECT * FROM professionals WHERE profile_slug = $1', [profile_slug]);
+      return toProfessional(rows[0] || null);
+    },
+    async create(data) {
+      const profile_slug = data.profile_slug || ('user_' + sanitizeProfileSlug(data.clerk_user_id));
+      const { rows } = await pool.query(
+        `INSERT INTO professionals (clerk_user_id, email, full_name, profile_slug, time_zone)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          data.clerk_user_id,
+          data.email || '',
+          data.full_name != null ? data.full_name : '',
+          profile_slug,
+          data.time_zone || 'America/Los_Angeles',
+        ]
+      );
+      return toProfessional(rows[0]);
+    },
+    async update(id, data) {
+      const updates = [];
+      const values = [];
+      let n = 1;
+      if (data.full_name !== undefined) {
+        updates.push(`full_name = $${n++}`);
+        values.push(data.full_name != null ? data.full_name : '');
+      }
+      if (data.profile_slug !== undefined) {
+        updates.push(`profile_slug = $${n++}`);
+        values.push(data.profile_slug);
+      }
+      if (data.time_zone !== undefined) {
+        updates.push(`time_zone = $${n++}`);
+        values.push(data.time_zone);
+      }
+      if (updates.length === 0) return store.professionals.getById(id);
+      updates.push(`updated_at = now()`);
+      values.push(Number(id));
+      const { rows } = await pool.query(
+        `UPDATE professionals SET ${updates.join(', ')} WHERE id = $${n} RETURNING *`,
+        values
+      );
+      return toProfessional(rows[0] || null);
+    },
+  },
+  slug_redirects: {
+    async insert(data) {
+      await pool.query(
+        'INSERT INTO slug_redirects (old_slug, professional_id) VALUES ($1, $2)',
+        [data.old_slug, Number(data.professional_id)]
+      );
+    },
+  },
   eventTypes: {
-    async all() {
+    async all(professional_id) {
+      if (professional_id != null) {
+        const { rows } = await pool.query('SELECT * FROM event_types WHERE professional_id = $1 ORDER BY id', [Number(professional_id)]);
+        return rows.map(toEventType);
+      }
       const { rows } = await pool.query('SELECT * FROM event_types ORDER BY id');
       return rows.map(toEventType);
     },
@@ -89,6 +180,7 @@ const store = {
       return toEventType(rows[0] || null);
     },
     async create(data) {
+      if (data.professional_id == null) throw new Error('professional_id required');
       const duration = data.durationMinutes ?? 30;
       if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationMinutes must be a positive number');
       const recurringCount = clampRecurringCount(data.recurringCount ?? 1);
@@ -96,11 +188,13 @@ const store = {
       const { rows: existing } = await pool.query('SELECT id FROM event_types WHERE slug = $1', [data.slug]);
       if (existing.length > 0) throw new Error('Slug already exists');
       const location = (data.location != null && String(data.location)) || '';
+      const time_zone = data.time_zone || data.timeZone || 'America/Los_Angeles';
+      const price_dollars = data.price_dollars != null ? Number(data.price_dollars) : (data.priceDollars != null ? Number(data.priceDollars) : 0);
       const { rows } = await pool.query(
-        `INSERT INTO event_types (slug, name, description, duration_minutes, allow_recurring, recurring_count, availability, location)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+        `INSERT INTO event_types (professional_id, slug, name, description, duration_minutes, allow_recurring, recurring_count, availability, location, time_zone, price_dollars)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
          RETURNING *`,
-        [data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability), location]
+        [Number(data.professional_id), data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability), location, time_zone, price_dollars]
       );
       return toEventType(rows[0]);
     },
@@ -121,18 +215,30 @@ const store = {
       const recurringCount = data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(existing.recurringCount);
       const availability = data.availability !== undefined ? data.availability : existing.availability;
       const location = data.location !== undefined ? (data.location != null && String(data.location)) || '' : (existing.location || '');
+      const time_zone = data.time_zone !== undefined ? data.time_zone : (data.timeZone !== undefined ? data.timeZone : existing.timeZone);
+      const price_dollars = data.price_dollars !== undefined ? Number(data.price_dollars) : (data.priceDollars !== undefined ? Number(data.priceDollars) : existing.priceDollars);
       const { rows } = await pool.query(
         `UPDATE event_types
-         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb, location = $8
-         WHERE id = $9
+         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb, location = $8, time_zone = $9, price_dollars = $10
+         WHERE id = $11
          RETURNING *`,
-        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), location, Number(id)]
+        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), location, time_zone, price_dollars, Number(id)]
       );
       return toEventType(rows[0]);
     },
   },
   bookings: {
-    async list() {
+    async list(professional_id) {
+      if (professional_id != null) {
+        const { rows } = await pool.query(
+          `SELECT b.* FROM bookings b
+           JOIN event_types et ON et.id = b.event_type_id
+           WHERE et.professional_id = $1
+           ORDER BY b.start_time`,
+          [Number(professional_id)]
+        );
+        return rows.map(toBooking);
+      }
       const { rows } = await pool.query('SELECT * FROM bookings ORDER BY start_time');
       return rows.map(toBooking);
     },
@@ -170,11 +276,12 @@ const store = {
     async insert(record) {
       const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
       const { rows } = await pool.query(
-        `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
-         VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9, $10)
+        `INSERT INTO bookings (event_type_id, client_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
+         VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           record.event_type_id,
+          record.client_id != null ? Number(record.client_id) : null,
           record.start_time,
           record.end_time,
           record.first_name,
@@ -273,15 +380,17 @@ const store = {
             return { conflict: true, conflictingStart: slot.start_time };
           }
         }
+        const client_id = guest.client_id != null ? Number(guest.client_id) : null;
         const created = [];
         for (const slot of slots) {
           const duration_minutes = slot.duration_minutes != null ? slot.duration_minutes : deriveDurationMinutes(slot.start_time, slot.end_time);
           const { rows } = await client.query(
-            `INSERT INTO bookings (event_type_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
-             VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9, $10)
+            `INSERT INTO bookings (event_type_id, client_id, start_time, end_time, first_name, last_name, email, phone, recurring_group_id, notes, duration_minutes)
+             VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
             [
               eventTypeId,
+              client_id,
               slot.start_time,
               slot.end_time,
               guest.first_name,

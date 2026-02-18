@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { theme } from '../styles/theme';
-
-const API = '/api';
+import { useApi } from '../api';
 
 function parseDateTime(startTime, endTime) {
   const s = (startTime || '').replace(' ', 'T').substring(0, 19);
@@ -17,6 +16,7 @@ function parseDateTime(startTime, endTime) {
 export default function EventEditPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
+  const { apiFetch } = useApi();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,7 +35,7 @@ export default function EventEditPage() {
   const [overlapError, setOverlapError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/bookings/${bookingId}`)
+    apiFetch(`/bookings/${bookingId}`)
       .then((r) => {
         if (!r.ok) {
           if (r.status === 404) return null;
@@ -65,7 +65,7 @@ export default function EventEditPage() {
       })
       .catch(() => navigate('/setup/bookings', { replace: true }))
       .finally(() => setLoading(false));
-  }, [bookingId, navigate]);
+  }, [bookingId, navigate, apiFetch]);
 
   const handleSave = () => {
     if (!booking) return;
@@ -99,9 +99,8 @@ export default function EventEditPage() {
     if (startTime !== existingStart) payload.startTime = startTime;
     if (durationMinutes !== booking.duration_minutes) payload.durationMinutes = durationMinutes;
     setSaving(true);
-    fetch(`${API}/bookings/${bookingId}`, {
+    apiFetch(`/bookings/${bookingId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
       .then((r) => {
@@ -114,7 +113,7 @@ export default function EventEditPage() {
       .catch((e) => {
         if (e.status === 409) {
           setOverlapError(e.error || 'This time would overlap with another lesson. Try a shorter duration or a different time.');
-          fetch(`${API}/bookings/${bookingId}`)
+          apiFetch(`/bookings/${bookingId}`)
             .then((r) => r.ok ? r.json() : null)
             .then((data) => {
               if (data) {
@@ -148,7 +147,7 @@ export default function EventEditPage() {
     }
     if (!booking) return;
     setDeleting(true);
-    fetch(`${API}/bookings/${bookingId}`, { method: 'DELETE' })
+    apiFetch(`/bookings/${bookingId}`, { method: 'DELETE' })
       .then((r) => {
         if (!r.ok) return r.json().then((d) => Promise.reject(new Error(d.error || 'Failed')));
       })

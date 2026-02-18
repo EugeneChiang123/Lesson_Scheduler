@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const API = '/api';
+import { useApi } from '../api';
 
 function EventHoverCard({ booking, x, y }) {
   return (
@@ -60,6 +59,7 @@ function getEndOfDay(d) {
 
 export default function BookingsCalendar() {
   const navigate = useNavigate();
+  const { apiFetch } = useApi();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('month');
@@ -67,11 +67,11 @@ export default function BookingsCalendar() {
   const [hoverState, setHoverState] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/bookings`)
+    apiFetch('/bookings')
       .then((r) => r.json())
       .then(setBookings)
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiFetch]);
 
   const bookingsWithDates = bookings.map((b) => ({
     ...b,

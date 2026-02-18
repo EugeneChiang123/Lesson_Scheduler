@@ -104,6 +104,28 @@ initIds();
 
 const store = {
   clampRecurringCount,
+  professionals: {
+    getByClerkId() {
+      return Promise.resolve(null);
+    },
+    getById() {
+      return Promise.resolve(null);
+    },
+    getByProfileSlug() {
+      return Promise.resolve(null);
+    },
+    create() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+    update() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+  },
+  slug_redirects: {
+    insert() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+  },
   eventTypes: {
     all() {
       return Promise.resolve(readEventTypes());

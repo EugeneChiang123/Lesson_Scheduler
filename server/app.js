@@ -2,9 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+const { requireProfessional, requireProfessionalUnlessPublicEventTypes, requireProfessionalUnlessPost } = require('./middleware/auth');
 const eventTypesRouter = require('./routes/eventTypes');
 const slotsRouter = require('./routes/slots');
 const bookingsRouter = require('./routes/bookings');
+const professionalsRouter = require('./routes/professionals');
 
 const app = express();
 
@@ -17,9 +19,11 @@ app.get('/api/health', (req, res) => {
   res.json({ store: url ? 'postgres' : 'file' });
 });
 
-app.use('/api/event-types', slotsRouter);
-app.use('/api/event-types', eventTypesRouter);
-app.use('/api/bookings', bookingsRouter);
+app.use('/api/professionals', requireProfessional, professionalsRouter);
+
+app.use('/api/event-types', requireProfessionalUnlessPublicEventTypes, slotsRouter);
+app.use('/api/event-types', requireProfessionalUnlessPublicEventTypes, eventTypesRouter);
+app.use('/api/bookings', requireProfessionalUnlessPost, bookingsRouter);
 
 if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   app.use(express.static(path.join(__dirname, '../client/dist')));
