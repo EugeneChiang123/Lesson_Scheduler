@@ -296,8 +296,17 @@ const store = {
         const end_time = data.end_time !== undefined ? data.end_time : row.end_time;
         const start = start_time.replace(' ', 'T');
         const end = end_time.replace(' ', 'T');
+        const eventTypes = readEventTypes();
+        const myEventType = eventTypes.find((e) => Number(e.id) === Number(row.event_type_id));
+        const professionalId = myEventType != null ? Number(myEventType.professional_id ?? myEventType.professionalId) : null;
+        const eventTypeIdsForProfessional = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === professionalId)
+            .map((e) => Number(e.id))
+        );
         const overlapping = list.find((b) => {
           if (b.id === Number(id)) return false;
+          if (professionalId != null && !eventTypeIdsForProfessional.has(Number(b.event_type_id))) return false;
           const bStart = b.start_time.replace(' ', 'T');
           const bEnd = b.end_time.replace(' ', 'T');
           return start < bEnd && end > bStart;

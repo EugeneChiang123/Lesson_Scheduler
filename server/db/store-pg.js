@@ -358,8 +358,14 @@ const store = {
         const end_time = data.end_time !== undefined ? data.end_time : existing.end_time;
         const start = start_time.replace(' ', 'T').substring(0, 19);
         const end = end_time.replace(' ', 'T').substring(0, 19);
+        // Scope overlap check to same professional (join via event_types) so one pro's edit doesn't conflict with another's.
         const { rows: overlapping } = await client.query(
-          'SELECT * FROM bookings WHERE id != $1 AND start_time < $2::timestamptz AND end_time > $3::timestamptz LIMIT 1',
+          `SELECT b.* FROM bookings b
+           INNER JOIN event_types et ON et.id = b.event_type_id
+           WHERE b.id != $1
+             AND b.start_time < $2::timestamptz AND b.end_time > $3::timestamptz
+             AND et.professional_id = (SELECT professional_id FROM event_types WHERE id = (SELECT event_type_id FROM bookings WHERE id = $1))
+           LIMIT 1`,
           [Number(id), end, start]
         );
         if (overlapping.length > 0) {
