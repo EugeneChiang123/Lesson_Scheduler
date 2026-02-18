@@ -123,6 +123,8 @@ Array of event type objects:
 | recurringCount | number | Number of sessions per recurring booking (1–52) |
 | availability | array | Weekly windows: `{ day, start, end }`; `day` 0–6 (Sun–Sat), `start`/`end` like `"09:00"`, `"17:00"` |
 | location | string | Optional location (e.g. room, Zoom link) |
+| timeZone | string | IANA time zone for slots and display (e.g. `America/Los_Angeles`) |
+| priceDollars | number | Price in USD (0 = free). Shown on booking page. |
 
 **Errors:** `500` — server error with `{ "error": "message" }`.
 
@@ -207,7 +209,7 @@ Update an event type (instructor). Partial update; omit fields to leave unchange
 
 ### GET /api/event-types/:slug/slots
 
-Get available start times for a given date. Slots are derived from the event type’s weekly availability, minus already-booked times and past times for today.
+Get available start times for a given date. Slots are generated in the event type time zone (date in that zone, start times in UTC as ISO with Z). Already-booked and past times are excluded.
 
 **Parameters:**
 
@@ -216,7 +218,7 @@ Get available start times for a given date. Slots are derived from the event typ
 
 **Response:** `200 OK`
 
-Array of strings: ISO-like start times for the date (e.g. `"2026-02-20T09:00:00"`). Sorted.
+Array of strings: UTC slot start times in ISO format with `Z` (e.g. `"2026-02-20T17:00:00Z"`). Sorted. Generated using the event type time zone; client should display in that `timeZone`.
 
 **Errors:**
 

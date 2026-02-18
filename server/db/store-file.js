@@ -91,6 +91,24 @@ function normalizeBooking(b) {
   return { ...b, notes: b.notes ?? '', duration_minutes };
 }
 
+function toEventType(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    professionalId: row.professional_id != null ? row.professional_id : row.professionalId,
+    slug: row.slug,
+    name: row.name,
+    description: row.description || '',
+    durationMinutes: row.durationMinutes ?? row.duration_minutes ?? 30,
+    allowRecurring: Boolean(row.allowRecurring ?? row.allow_recurring),
+    recurringCount: row.recurringCount ?? row.recurring_count ?? 1,
+    availability: Array.isArray(row.availability) ? row.availability : [],
+    location: row.location || '',
+    timeZone: row.timeZone || row.time_zone || 'America/Los_Angeles',
+    priceDollars: row.priceDollars != null ? Number(row.priceDollars) : (row.price_dollars != null ? Number(row.price_dollars) : 0),
+  };
+}
+
 let eventTypeId = 1;
 let bookingId = 1;
 
@@ -129,23 +147,26 @@ const store = {
       return Promise.resolve(null);
     },
   },
+  clients: {
+    upsert() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+  },
   eventTypes: {
     all(professional_id) {
       const list = readEventTypes();
-      if (professional_id != null) {
-        const pid = Number(professional_id);
-        const filtered = list.filter(
-          (e) => Number(e.professional_id ?? e.professionalId) === pid
-        );
-        return Promise.resolve(filtered);
-      }
-      return Promise.resolve(list);
+      const raw = professional_id != null
+        ? list.filter((e) => Number(e.professional_id ?? e.professionalId) === Number(professional_id))
+        : list;
+      return Promise.resolve(raw.map(toEventType));
     },
     getBySlug(slug) {
-      return Promise.resolve(readEventTypes().find((e) => e.slug === slug) || null);
+      const row = readEventTypes().find((e) => e.slug === slug) || null;
+      return Promise.resolve(toEventType(row));
     },
     getById(id) {
-      return Promise.resolve(readEventTypes().find((e) => e.id === Number(id)) || null);
+      const row = readEventTypes().find((e) => e.id === Number(id)) || null;
+      return Promise.resolve(toEventType(row));
     },
     create(data) {
       const list = readEventTypes();
@@ -163,10 +184,12 @@ const store = {
         recurringCount: clampRecurringCount(data.recurringCount ?? 1),
         availability: Array.isArray(data.availability) ? data.availability : [],
         location: data.location != null ? String(data.location) : '',
+        timeZone: data.time_zone || data.timeZone || 'America/Los_Angeles',
+        priceDollars: data.price_dollars != null ? Number(data.price_dollars) : (data.priceDollars != null ? Number(data.priceDollars) : 0),
       };
       list.push(row);
       writeEventTypes(list);
-      return Promise.resolve(row);
+      return Promise.resolve(toEventType(row));
     },
     update(id, data) {
       const list = readEventTypes();
@@ -186,10 +209,12 @@ const store = {
         recurringCount: data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(row.recurringCount),
         availability: data.availability !== undefined ? data.availability : row.availability,
         location: data.location !== undefined ? (data.location != null ? String(data.location) : '') : (row.location || ''),
+        timeZone: data.time_zone !== undefined || data.timeZone !== undefined ? (data.time_zone || data.timeZone || row.timeZone || 'America/Los_Angeles') : (row.timeZone || 'America/Los_Angeles'),
+        priceDollars: data.price_dollars !== undefined || data.priceDollars !== undefined ? Number(data.price_dollars ?? data.priceDollars ?? row.priceDollars ?? 0) : (row.priceDollars != null ? Number(row.priceDollars) : 0),
       };
       list[idx] = updated;
       writeEventTypes(list);
-      return Promise.resolve(updated);
+      return Promise.resolve(toEventType(updated));
     },
   },
   bookings: {
@@ -221,10 +246,21 @@ const store = {
     },
     getBookingsOnDate(dateStr) {
       const list = readBookings().filter((b) => {
-        const s = b.start_time.replace(' ', 'T');
-        return s.startsWith(dateStr);
+        const s = (b.start_time || '').replace(' ', 'T');
+        return s.startsWith(dateStr.substring(0, 10));
       });
       return Promise.resolve(list);
+    },
+    getBookingsForEventTypeInRange(eventTypeId, utcStartIso, utcEndIso) {
+      const start = (utcStartIso || '').replace(' ', 'T').substring(0, 19);
+      const end = (utcEndIso || '').replace(' ', 'T').substring(0, 19);
+      const list = readBookings().filter((b) => {
+        if (Number(b.event_type_id) !== Number(eventTypeId)) return false;
+        const bStart = (b.start_time || '').replace(' ', 'T').substring(0, 19);
+        const bEnd = (b.end_time || '').replace(' ', 'T').substring(0, 19);
+        return bStart < end && bEnd > start;
+      });
+      return Promise.resolve(list.map(normalizeBooking));
     },
     findOverlapping(startTime, endTime) {
       const list = readBookings();
@@ -320,6 +356,7 @@ const store = {
           const row = {
             id: bookingId++,
             event_type_id: eventTypeId,
+            client_id: guest.client_id != null ? guest.client_id : null,
             start_time: slot.start_time,
             end_time: slot.end_time,
             first_name: guest.first_name,

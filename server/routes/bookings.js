@@ -156,14 +156,10 @@ router.delete('/:id', async (req, res) => {
 });
 
 function addMinutes(isoStr, minutes) {
-  const d = new Date(isoStr.replace(' ', 'T'));
-  d.setMinutes(d.getMinutes() + minutes);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${y}-${m}-${day} ${h}:${min}:00`;
+  const s = (isoStr || '').trim().replace(' ', 'T');
+  const d = new Date(s.includes('Z') ? s : s + 'Z');
+  d.setUTCMinutes(d.getUTCMinutes() + minutes);
+  return d.toISOString().slice(0, 19) + 'Z';
 }
 
 // POST /api/bookings
@@ -183,16 +179,11 @@ router.post('/', async (req, res) => {
 
     const startTimes = [startTime];
     if (allowRecurring && recurringCount > 1) {
-      const first = new Date(startTime.replace(' ', 'T'));
+      const s = (startTime || '').trim().replace(' ', 'T');
+      const first = new Date(s.includes('Z') ? s : s + 'Z');
       for (let i = 1; i < recurringCount; i++) {
-        const next = new Date(first);
-        next.setDate(next.getDate() + 7 * i);
-        const y = next.getFullYear();
-        const m = String(next.getMonth() + 1).padStart(2, '0');
-        const d = String(next.getDate()).padStart(2, '0');
-        const h = String(next.getHours()).padStart(2, '0');
-        const min = String(next.getMinutes()).padStart(2, '0');
-        startTimes.push(`${y}-${m}-${d} ${h}:${min}:00`);
+        const next = new Date(first.getTime() + 7 * i * 24 * 60 * 60 * 1000);
+        startTimes.push(next.toISOString().slice(0, 19) + 'Z');
       }
     }
 
@@ -200,7 +191,8 @@ router.post('/', async (req, res) => {
 
     const now = new Date();
     for (const st of startTimes) {
-      const slotStart = new Date(st.replace(' ', 'T'));
+      const s = (st || '').trim().replace(' ', 'T');
+      const slotStart = new Date(s.includes('Z') ? s : s + 'Z');
       if (slotStart <= now) {
         return res.status(400).json({ error: 'Cannot create booking in the past', requestedStart: st });
       }
@@ -208,7 +200,7 @@ router.post('/', async (req, res) => {
 
     // Ensure each startTime is an allowed slot for that date (from eventType.availability)
     for (const st of startTimes) {
-      const normalized = st.replace(' ', 'T').substring(0, 19);
+      const normalized = (st || '').trim().replace(' ', 'T').substring(0, 19) + (st.includes('Z') ? 'Z' : '');
       const dateStr = normalized.substring(0, 10);
       const possibleSlots = getSlotsForDate(eventType, dateStr);
       if (!possibleSlots.includes(normalized)) {
@@ -219,11 +211,30 @@ router.post('/', async (req, res) => {
     // Build slots and insert atomically (transaction with row lock in Postgres, mutex in file store)
     // so two simultaneous requests for the same slot cannot both pass the conflict check.
     const slots = startTimes.map((st) => {
-      const startNorm = st.includes('T') ? st.replace('T', ' ').substring(0, 19) : st;
-      const endNorm = addMinutes(startNorm, duration);
-      return { start_time: startNorm, end_time: endNorm, duration_minutes: duration };
+      const startNorm = (st || '').trim().replace(' ', 'T');
+      const startUtc = startNorm.includes('Z') ? startNorm : startNorm.substring(0, 19) + 'Z';
+      const endUtc = addMinutes(startUtc, duration);
+      return { start_time: startUtc, end_time: endUtc, duration_minutes: duration };
     });
-    const guest = { first_name: firstName, last_name: lastName, email, phone, recurring_group_id: recurringGroupId };
+    let clientId = null;
+    try {
+      clientId = await store.clients.upsert({
+        email: email.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone: phone != null ? String(phone).trim() : null,
+      });
+    } catch (err) {
+      if (err.message !== 'Auth requires Postgres') throw err;
+    }
+    const guest = {
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      phone: phone != null ? String(phone).trim() : null,
+      recurring_group_id: recurringGroupId,
+      client_id: clientId,
+    };
     const result = await store.bookings.createBatchIfNoConflict(eventType.id, slots, guest);
 
     if (result.conflict) {

@@ -172,6 +172,29 @@ const store = {
       return rows[0] ? rows[0].profile_slug : null;
     },
   },
+  clients: {
+    /**
+     * Upsert client by (email, first_name, last_name). Updates phone if row exists.
+     * @param {{ email: string, first_name: string, last_name: string, phone?: string }} guest
+     * @returns {Promise<number>} client id
+     */
+    async upsert(guest) {
+      const { rows } = await pool.query(
+        `INSERT INTO clients (email, first_name, last_name, phone)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (email, first_name, last_name)
+         DO UPDATE SET phone = EXCLUDED.phone
+         RETURNING id`,
+        [
+          String(guest.email ?? '').trim().substring(0, 255),
+          String(guest.first_name ?? '').trim().substring(0, 255),
+          String(guest.last_name ?? '').trim().substring(0, 255),
+          guest.phone != null ? String(guest.phone).trim().substring(0, 255) : null,
+        ]
+      );
+      return rows[0].id;
+    },
+  },
   eventTypes: {
     async all(professional_id) {
       if (professional_id != null) {
@@ -271,6 +294,16 @@ const store = {
       const { rows } = await pool.query(
         `SELECT * FROM bookings WHERE start_time::text LIKE $1 ORDER BY start_time`,
         [prefix + '%']
+      );
+      return rows.map(toBooking);
+    },
+    /** Bookings for one event type that overlap [utcEndExcl, utcStartExcl). Times in ISO or "YYYY-MM-DD HH:mm:ss". */
+    async getBookingsForEventTypeInRange(eventTypeId, utcStartIso, utcEndIso) {
+      const start = utcStartIso.replace(' ', 'T').substring(0, 19);
+      const end = utcEndIso.replace(' ', 'T').substring(0, 19);
+      const { rows } = await pool.query(
+        `SELECT * FROM bookings WHERE event_type_id = $1 AND start_time < $2::timestamptz AND end_time > $3::timestamptz ORDER BY start_time`,
+        [Number(eventTypeId), end, start]
       );
       return rows.map(toBooking);
     },

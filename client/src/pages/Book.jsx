@@ -141,22 +141,29 @@ export default function Book() {
   }
   if (!eventType) return null;
 
+  const eventTimeZone = eventType.timeZone || eventType.time_zone || 'America/Los_Angeles';
   const formatSlot = (s) => {
-    const d = new Date(s.replace(' ', 'T'));
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const str = (s || '').trim().replace(' ', 'T');
+    const d = new Date(str.includes('Z') ? str : str + 'Z');
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: eventTimeZone });
+  };
+  const formatPrice = (priceDollars) => {
+    const n = priceDollars != null ? Number(priceDollars) : 0;
+    if (n <= 0) return 'Free';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
   };
 
   if (success) {
     const calendarUrl = buildAddToCalendarUrl(
       eventType.name,
-      selectedSlot.replace(' ', 'T'),
+      (selectedSlot || '').replace(' ', 'T'),
       eventType.durationMinutes || 30
     );
     return (
       <div style={styles.page}>
         <div style={styles.card}>
           <div style={isDesktop ? styles.twoCol : styles.singleCol}>
-            <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+            <EventSummaryCard eventType={eventType} sticky={isDesktop} formatPrice={formatPrice} timeZoneLabel={eventTimeZone.replace(/_/g, ' ')} />
             <div style={styles.rightCol}>
               <div style={styles.successBlock}>
                 <div style={styles.successIcon}>✓</div>
@@ -184,7 +191,7 @@ export default function Book() {
     <div style={styles.page}>
       <div style={styles.card}>
         <div style={isDesktop ? styles.twoCol : styles.singleCol}>
-          <EventSummaryCard eventType={eventType} sticky={isDesktop} />
+          <EventSummaryCard eventType={eventType} sticky={isDesktop} formatPrice={formatPrice} timeZoneLabel={eventTimeZone.replace(/_/g, ' ')} />
           <div style={styles.rightCol}>
             {!selectedDate ? (
               <CalendarStep
@@ -201,6 +208,7 @@ export default function Book() {
                 slotsLoading={slotsLoading}
                 setSelectedSlot={setSelectedSlot}
                 formatSlot={formatSlot}
+                timeZoneLabel={eventTimeZone.replace(/_/g, ' ')}
               />
             ) : (
               <FormStep
@@ -221,13 +229,25 @@ export default function Book() {
   );
 }
 
-function EventSummaryCard({ eventType, sticky = true }) {
+function EventSummaryCard({ eventType, sticky = true, formatPrice, timeZoneLabel }) {
+  const price = formatPrice ? formatPrice(eventType.priceDollars ?? eventType.price_dollars) : null;
   return (
     <div style={{ ...styles.summaryCard, ...(sticky ? styles.summaryCardSticky : {}) }}>
       <h1 style={styles.summaryName}>{eventType.name}</h1>
       <p style={styles.summaryMeta}>
         <span style={styles.metaIcon}>🕐</span> {formatDuration(eventType.durationMinutes)}
+        {price != null && (
+          <>
+            <span style={styles.metaSep}> · </span>
+            <span>{price}</span>
+          </>
+        )}
       </p>
+      {timeZoneLabel && (
+        <p style={styles.summaryTz}>
+          <span style={styles.metaIcon}>🌐</span> Times in {timeZoneLabel}
+        </p>
+      )}
       {eventType.description && (
         <p style={styles.summaryDesc}>{eventType.description}</p>
       )}
@@ -322,6 +342,7 @@ function SlotsStep({
   slotsLoading,
   setSelectedSlot,
   formatSlot,
+  timeZoneLabel,
 }) {
   return (
     <section style={styles.section}>
@@ -339,7 +360,9 @@ function SlotsStep({
           day: 'numeric',
         })}
       </h2>
-      <p style={styles.sectionSub}>Choose a time</p>
+      <p style={styles.sectionSub}>
+        Choose a time{timeZoneLabel ? ` (${timeZoneLabel})` : ''}
+      </p>
       {slotsLoading ? (
         <p style={styles.muted}>Loading times…</p>
       ) : slots.length === 0 ? (
@@ -487,6 +510,8 @@ const styles = {
   summaryDesc: { color: theme.muted, margin: '0 0 12px', fontSize: 15, lineHeight: 1.5, whiteSpace: 'pre-wrap' },
   summaryMeta: { color: theme.muted, fontSize: 14, margin: 0, display: 'flex', alignItems: 'center', gap: 6 },
   metaIcon: { fontSize: 16 },
+  metaSep: { color: theme.muted },
+  summaryTz: { color: theme.muted, fontSize: 13, margin: '4px 0 0' },
   summaryRecurring: { color: theme.primary, fontSize: 14, margin: '12px 0 0' },
   section: { margin: 0 },
   sectionTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 16px', color: theme.text },
