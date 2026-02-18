@@ -21,15 +21,18 @@ export function useApi() {
       headers.Authorization = `Bearer ${token}`;
     }
     const body = options.body;
-    const isJsonBody =
+    const isPlainObject =
       body !== undefined &&
       body !== null &&
-      (typeof body === 'string' ||
-        (typeof body === 'object' && !(body instanceof FormData) && !(body instanceof URLSearchParams)));
-    if (isJsonBody && !headers['Content-Type']) {
+      typeof body === 'object' &&
+      !(body instanceof FormData) &&
+      !(body instanceof URLSearchParams);
+    const bodyToSend = isPlainObject ? JSON.stringify(body) : body;
+    const sendJson = isPlainObject || (body !== undefined && body !== null && typeof body === 'string');
+    if (sendJson && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
-    return fetch(url, { ...options, headers });
+    return fetch(url, { ...options, headers, body: bodyToSend });
   }, [getToken]);
 
   return { apiFetch };
