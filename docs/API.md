@@ -43,7 +43,7 @@ Returns reserved path segments that cannot be used as profile slugs. No auth.
 **Response:** `200 OK`
 
 ```json
-{ "slugs": ["book", "setup", "api", "auth", "sign-in", "sign-up", "health", "login", "logout", "signin", "signup", "new", "edit", "bookings"] }
+{ "slugs": ["book", "booking", "bookings", "setup", "api", "auth", "sign-in", "sign-up", "health", "login", "logout", "signin", "signup", "new", "edit"] }
 ```
 
 ---
@@ -91,7 +91,7 @@ Update the current professional. Partial update; omit fields to leave unchanged.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | full_name | string | no | Display name |
-| profile_slug | string | no | URL slug (must not be reserved: book, setup, api, auth, sign-in, sign-up, health, login, logout, etc.) |
+| profile_slug | string | no | URL slug (must not be reserved: book, booking, bookings, setup, api, auth, sign-in, sign-up, health, login, logout, etc.) |
 | time_zone | string | no | IANA or offset |
 
 **Response:** `200 OK` — updated professional object (same shape as GET /me).

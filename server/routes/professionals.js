@@ -9,8 +9,8 @@ const router = express.Router();
 
 /** Reserved path segments; used for profile_slug validation and client route guard. */
 const RESERVED_SLUGS = new Set([
-  'book', 'setup', 'api', 'auth', 'sign-in', 'sign-up', 'health', 'login', 'logout',
-  'signin', 'signup', 'new', 'edit', 'bookings',
+  'book', 'booking', 'bookings', 'setup', 'api', 'auth', 'sign-in', 'sign-up', 'health', 'login', 'logout',
+  'signin', 'signup', 'new', 'edit',
 ]);
 
 /** Public router: no auth. Mount first under /api/professionals. */
