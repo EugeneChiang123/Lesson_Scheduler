@@ -10,7 +10,7 @@ One-place reference for what each important file does and how it fits in. For da
 |------|--------|
 | **package.json** | App name, scripts (`server`, `client`, `dev`, `build`, `db:migrate`, `db:migrate-pg`, `db:seed-pg`, `workflow-test`), and dependencies (express, pg, cors, dotenv). |
 | **vercel.json** | Build and rewrites: buildCommand/outputDirectory for client, `/api/:path*` → `/api/[[...path]]`, SPA fallback for non-API routes. |
-| **.env.example** | Template for optional `POSTGRES_URL` (or `DATABASE_URL`); when set, app uses Postgres instead of file store. See [POSTGRES_SETUP.md](POSTGRES_SETUP.md). |
+| **.env.example** | Template for optional `POSTGRES_URL` (or `DATABASE_URL`); Clerk keys; optional `RESEND_API_KEY` and `EMAIL_FROM` for booking confirmation email. See [POSTGRES_SETUP.md](POSTGRES_SETUP.md). |
 | **api/[[...path]].js** | Vercel serverless catch-all for `/api/*`. Restores `req.url` from query param if present, then forwards the request to the Express app so routes match. |
 | **app.js** (root) | Optional Vercel entry that exports `server/app`; used when Vercel runs the Express app directly. |
 
@@ -26,7 +26,8 @@ One-place reference for what each important file does and how it fits in. For da
 | **server/routes/professionals.js** | Public: GET /api/professionals/reserved-slugs, GET /api/professionals/by-slug/:slug (redirect or profileSlug). Auth: GET /me, PATCH /me (full_name, profile_slug, time_zone); reserved path validation; slug_redirects on slug change. |
 | **server/routes/eventTypes.js** | Event types CRUD: list (scoped by professional), get by id, get by slug (public), create (POST), update (PATCH). Uses `server/db/store`. |
 | **server/routes/slots.js** | `GET /:slug/slots?date=YYYY-MM-DD`: timezone-aware slot generation (Luxon); date interpreted in event type `timeZone`, slots returned as UTC ISO with Z; uses `bookings.getBookingsForEventTypeInRange`. Exports `getSlotsForDate` for bookings route. |
-| **server/routes/bookings.js** | List all bookings (instructor); GET /:id, PATCH /:id, DELETE /:id for single booking; POST to create one or more bookings (student), upserts client then createBatchIfNoConflict with client_id; recurring and conflict checks. Uses store and slots’ `getSlotsForDate`. |
+| **server/routes/bookings.js** | List all bookings (instructor); GET /:id, PATCH /:id, DELETE /:id for single booking; POST to create one or more bookings (student), upserts client then createBatchIfNoConflict with client_id; after success calls email service to send confirmations to client and professional; recurring and conflict checks. Uses store, slots’ `getSlotsForDate`, and `server/services/email`. |
+| **server/services/email.js** | Resend-based booking confirmation: HTML templates for client and professional, From = EMAIL_FROM, Reply-To = professional; add-to-calendar and manage (placeholder) links. On failure logs and returns { sent: false }; never throws so booking creation is not failed. |
 | **server/db/store.js** | Store switcher: if `POSTGRES_URL` or `DATABASE_URL` is set, requires `store-pg`, else requires `store-file`. Single API for routes. |
 | **server/db/store-file.js** | File-backed store: JSON files in `server/db/` (or `/tmp` on Vercel). Implements same API as store-pg; uses per–event-type mutex for atomic booking conflict check. `clients.upsert` rejects (Auth requires Postgres). |
 | **server/db/store-pg.js** | Postgres-backed store (same API as store-file). Uses `pg` Pool; maps DB rows to app shapes (camelCase event types, formatted timestamps). `slug_redirects.getRedirect(old_slug)`; `clients.upsert(guest)` by (email, first_name, last_name), returns client id. |
@@ -44,7 +45,7 @@ One-place reference for what each important file does and how it fits in. For da
 | File | Purpose |
 |------|--------|
 | **client/src/main.jsx** | React root: ClerkProvider, BrowserRouter, App; uses VITE_CLERK_PUBLISHABLE_KEY. |
-| **client/src/App.jsx** | Route definitions: `/` → `/setup`, `/sign-in`, `/sign-up`, `/book/:eventTypeSlug` → Book, `/setup` (ProtectedRoute + InstructorLayout), `/:professionalSlug` (ProtectedRoute + ProfessionalSlugGuard + InstructorLayout with same nested routes), `*` → `/`. |
+| **client/src/App.jsx** | Route definitions: `/` → `/setup`, `/sign-in`, `/sign-up`, `/book/:eventTypeSlug` → Book, `/booking/placeholder` → BookingPlaceholderPage, `/setup` (ProtectedRoute + InstructorLayout), `/:professionalSlug` (ProtectedRoute + ProfessionalSlugGuard + InstructorLayout with same nested routes), `*` → `/`. |
 | **client/src/api.js** | useApi() hook: apiFetch with Clerk Bearer token for protected endpoints. |
 | **client/src/components/ProtectedRoute.jsx** | Redirects to /sign-in when not signed in; wraps /setup and /:professionalSlug. |
 | **client/src/components/ProfessionalSlugGuard.jsx** | Resolves /:professionalSlug: reserved → redirect /setup; GET /me and GET /by-slug for redirect or dashboard; renders Outlet (InstructorLayout + children) when slug is current user’s profile slug. |
@@ -56,6 +57,7 @@ One-place reference for what each important file does and how it fits in. For da
 | **client/src/pages/SetupHome.jsx** | Instructor “Scheduling” page: lists event types (GET /api/event-types), search, copy booking link, links to create/edit and to Bookings. |
 | **client/src/pages/SetupEventForm.jsx** | Create or edit event type: loads one by id when editing (GET /api/event-types/id/:id), submits POST or PATCH to event-types (includes location), then navigates back to /setup. |
 | **client/src/pages/Book.jsx** | Public booking page: loads event type by slug, month calendar, fetches slots for selected date, form (name, email, phone), POST /api/bookings, success with optional add-to-calendar link. |
+| **client/src/pages/BookingPlaceholderPage.jsx** | Placeholder for “Cancel or edit this booking” link in confirmation emails; shows “coming soon” and suggests contacting the instructor. |
 | **client/src/pages/BookingsCalendar.jsx** | Instructor calendar: lists all bookings (GET /api/bookings), month/week/day views, hover popover with student info, click event → EventEditPage. |
 | **client/src/pages/EventEditPage.jsx** | Edit one booking: GET /api/bookings/:id, form (date, time, duration, name, email, phone, notes), PATCH to save (overlap check; 409 if would clash), DELETE to remove; redirects to basePath/bookings. |
 | **client/src/utils/formatDuration.js** | Formats duration in minutes for display (e.g. “30 min”). |
@@ -83,6 +85,7 @@ One-place reference for what each important file does and how it fits in. For da
 | **docs/INTERACTIONS.md** | Route → page map, page → API map, and flow diagrams (student booking, instructor setup, client–server). |
 | **docs/MVP_MITIGATION_QUESTIONS.md** | MVP gap mitigation: step-by-step questions with answer placeholders; answer in-doc then use as implementation spec. |
 | **docs/MVP_IMPLEMENTATION_PLAN.md** | MVP implementation: architecture, data model, API changes, and phased implementation steps. |
+| **docs/MVP_IMPLEMENTATION_SUMMARY.md** | Post-implementation summary: all 7 phases with steps, deliverables, and doc updates; quick reference for what was built. |
 | **planning.md** | Product vision, implementation order, Postgres rollout, risk and rollback (reference). |
 
 ---

@@ -9,8 +9,11 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | URL | Layout | Page / component |
 |-----|--------|-------------------|
 | `/` | — | Redirect to `/setup` |
+| `/sign-in` | — | **SignInPage** (Clerk sign-in; redirect to /setup after) |
+| `/sign-up` | — | **SignUpPage** (Clerk sign-up; redirect to /setup after) |
 | `/book/:eventTypeSlug` | — | **Book** (`client/src/pages/Book.jsx`) |
-| `/setup` | InstructorLayout | **SetupHome** (index) |
+| `/booking/placeholder` | — | **BookingPlaceholderPage** (cancel/edit coming soon) |
+| `/setup` | ProtectedRoute → InstructorLayout | **SetupHome** (index) |
 | `/setup/new` | InstructorLayout | **SetupEventForm** (create) |
 | `/setup/:id/edit` | InstructorLayout | **SetupEventForm** (edit) |
 | `/setup/bookings` | InstructorLayout | **BookingsCalendar** |
@@ -31,6 +34,13 @@ Which routes render which pages, which pages call which APIs, and how data flows
 | **BookingsCalendar** | `GET /api/bookings` |
 | **EventEditPage** | `GET /api/bookings/:id`, `PATCH /api/bookings/:id`, `DELETE /api/bookings/:id` |
 | **ProfessionalSlugGuard** | `GET /api/professionals/me`, `GET /api/professionals/by-slug/:slug` (public, for redirect resolution) |
+| **SignInPage** / **SignUpPage** | Clerk-hosted; no direct API (Clerk handles auth). After sign-in, client uses Bearer token for protected endpoints. |
+
+---
+
+## Auth flow
+
+Professionals must sign in to access `/setup` or `/:professionalSlug`. Unauthenticated users are redirected to `/sign-in` (with `state.from` for post-login redirect). After sign-in or sign-up, Clerk redirects to `/setup` (or the intended URL). The client sends `Authorization: Bearer <token>` (via `useApi().apiFetch`) for all protected endpoints: event-types list/create/patch, bookings list/get/patch/delete, professionals/me.
 
 ---
 
@@ -62,6 +72,7 @@ sequenceDiagram
   BookPage->>API: POST /api/bookings (eventTypeSlug, startTime, firstName, ...)
   API->>Store: createBatchIfNoConflict
   Store-->>API: created / conflict
+  API->>API: sendBookingConfirmation (client + professional email; optional, never fails request)
   API-->>BookPage: 201 or 409
   BookPage-->>User: Success or slot taken; optional add-to-calendar link
 ```
@@ -170,18 +181,25 @@ React app (client) talks only to the Express API. The API uses a single store in
 flowchart LR
   subgraph client [React SPA]
     App[App.jsx]
+    SignIn[SignInPage]
+    SignUp[SignUpPage]
     SetupHome[SetupHome]
     SetupForm[SetupEventForm]
     Book[Book]
     BookingsCal[BookingsCalendar]
+    Placeholder[BookingPlaceholderPage]
+    App --> SignIn
+    App --> SignUp
     App --> SetupHome
     App --> SetupForm
     App --> Book
     App --> BookingsCal
+    App --> Placeholder
   end
 
   subgraph api [Express API]
     Health[GET /api/health]
+    Professionals[professionals routes]
     EventTypes[eventTypes routes]
     Slots[slots route]
     Bookings[bookings routes]
@@ -195,14 +213,17 @@ flowchart LR
     StoreJS --> StorePG
   end
 
+  SignIn -.->|Clerk auth| Professionals
+  SignUp -.->|Clerk auth| Professionals
   SetupHome -->|GET event-types| EventTypes
   SetupForm -->|GET id, POST, PATCH| EventTypes
-  Book -->|GET slug, GET slots, POST bookings| EventTypes
-  Book --> Slots
-  Book --> Bookings
+  Book -->|GET slug, GET slots| EventTypes
+  Book -->|GET slots| Slots
+  Book -->|POST bookings| Bookings
   BookingsCal -->|GET bookings| Bookings
 
   EventTypes --> StoreJS
+  Professionals --> StoreJS
   Slots --> StoreJS
   Bookings --> StoreJS
 ```

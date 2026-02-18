@@ -376,7 +376,7 @@ After implementation, keep these in sync:
 - **[FILES.md](FILES.md):** New files (auth middleware, professionals route, email service); schema-mvp, migrate-mvp.
 - **[INTERACTIONS.md](INTERACTIONS.md):** Routes /:professionalSlug, /sign-in, /sign-up; page-to-API for dashboard and protected flows; email flow.
 
-**By phase:** Phase 1 → FILES.md. Phase 2 → FILES.md, API.md. Phase 3 → API.md. Phase 4 → INTERACTIONS.md, FILES.md. Phase 5 → API.md (response shapes). Phase 6 → optional API.md. Phase 7 → FILES.md, API.md (env), INTERACTIONS. Final pass → ARCHITECTURE.md full update.
+**By phase:** Phase 1 → FILES.md. Phase 2 → FILES.md, API.md. Phase 3 → API.md. Phase 4 → INTERACTIONS.md, FILES.md. Phase 5 → API.md (response shapes). Phase 6 → optional API.md. Phase 7 → FILES.md, API.md (env), INTERACTIONS. **Final pass (done):** ARCHITECTURE.md full update, API.md env vars, INTERACTIONS.md auth/sign-in/sign-up, FILES.md; [MVP_IMPLEMENTATION_SUMMARY.md](MVP_IMPLEMENTATION_SUMMARY.md) added.
 
 ---
 
@@ -405,4 +405,6 @@ Then update ARCHITECTURE, API, FILES, INTERACTIONS.
 | 5 | TZ slots + price on book page | Slots use event type time_zone; API returns price_dollars, time_zone; Book.jsx shows price & TZ | API.md |
 | 6 | Clients + client_id | clients.upsert; POST /api/bookings sets client_id | optional API.md |
 | 7 | Email on book | Send HTML to client & professional; system From, Reply-To; template; placeholder link | FILES.md, API.md |
-| — | Final | Full ARCHITECTURE, API, FILES, INTERACTIONS | ARCHITECTURE.md, all |
+| — | Final | Full ARCHITECTURE, API, FILES, INTERACTIONS, MVP_IMPLEMENTATION_SUMMARY | ARCHITECTURE.md, API.md, INTERACTIONS.md, FILES.md, MVP_IMPLEMENTATION_SUMMARY.md ✓ |
+
+All phases and the final doc pass are complete. See [MVP_IMPLEMENTATION_SUMMARY.md](MVP_IMPLEMENTATION_SUMMARY.md) for a concise summary of what was implemented.

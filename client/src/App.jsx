@@ -7,6 +7,7 @@ import SetupHome from './pages/SetupHome';
 import SetupEventForm from './pages/SetupEventForm';
 import BookingsCalendar from './pages/BookingsCalendar';
 import EventEditPage from './pages/EventEditPage';
+import BookingPlaceholderPage from './pages/BookingPlaceholderPage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/sign-in" element={<SignInPage />} />
       <Route path="/sign-up" element={<SignUpPage />} />
       <Route path="/book/:eventTypeSlug" element={<Book />} />
+      <Route path="/booking/placeholder" element={<BookingPlaceholderPage />} />
       <Route
         path="/setup"
         element={

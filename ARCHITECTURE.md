@@ -1,36 +1,51 @@
 # Architecture
 
-How the Lesson Scheduler is built: structure, stack, data model, API, flows, and persistence.
+How the Lesson Scheduler is built: structure, stack, data model, API, flows, and persistence. The MVP adds professionals (Clerk auth), scoped event types and bookings, dashboard at `/:professionalSlug`, clients and `client_id`, timezone/price on the booking page, and email confirmations. For a phase-by-phase implementation summary, see [docs/MVP_IMPLEMENTATION_SUMMARY.md](docs/MVP_IMPLEMENTATION_SUMMARY.md).
 
 ---
 
 ## High-level architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph client [React SPA]
-    Landing[Landing]
-    Book[Booking Calendar]
-    Instructor[Instructor Setup]
+    Landing["/ → /setup"]
+    Book["/book/:eventTypeSlug"]
+    Setup["/setup (protected)"]
+    ProDash["/:professionalSlug (protected)"]
+    SignIn["/sign-in"]
+    Placeholder["/booking/placeholder"]
   end
   subgraph api [Express API]
-    Events[Event Types]
-    Slots[Availability]
+    Auth[Clerk auth middleware]
+    Professionals[Professionals]
+    EventTypes[Event types]
+    Slots[Slots]
     Bookings[Bookings]
+    Email[Email service]
   end
   subgraph data [Persistence]
-    DB[(Database)]
+    Store[store.js]
+    DB[(Postgres or file)]
   end
-  Landing --> Book
+  Landing --> Setup
+  SignIn --> Auth
+  Setup --> Auth
+  ProDash --> Auth
+  Auth --> Professionals
+  Auth --> EventTypes
+  Auth --> Bookings
+  Book --> EventTypes
   Book --> Slots
   Book --> Bookings
-  Instructor --> Events
-  Events --> DB
-  Slots --> DB
-  Bookings --> DB
+  Bookings --> Email
+  EventTypes --> Store
+  Slots --> Store
+  Bookings --> Store
+  Store --> DB
 ```
 
-Single repo: `server/` (Express API), `client/` (React SPA). Event type URLs: `/book/:eventTypeSlug` (e.g. `/book/30min-intro`). Instructor creates event types and shares these links.
+Single repo: `server/` (Express API), `client/` (React SPA). Professionals sign in with Clerk; event type booking URLs remain public at `/book/:eventTypeSlug`. Instructor dashboard at `/setup` or `/:professionalSlug`.
 
 ---
 
@@ -38,102 +53,103 @@ Single repo: `server/` (Express API), `client/` (React SPA). Event type URLs: `/
 
 - **API:** Node.js + Express.
 - **Client:** React (SPA), Vite for build and dev.
-- **Persistence:** File store (JSON in `server/db/` or `/tmp` on Vercel) or Postgres when `POSTGRES_URL` is set. See [Persistence](#persistence) below.
+- **Auth:** Clerk (professionals only; clients/guests do not sign in).
+- **Persistence:** File store (JSON in `server/db/` or `/tmp` on Vercel) or Postgres when `POSTGRES_URL` is set. Auth and clients require Postgres; file store is for local dev without DB.
+- **Email:** Resend (optional); booking confirmations when `RESEND_API_KEY` and `EMAIL_FROM` are set.
 
 ---
 
 ## Data model
 
-**EventType**
+### Professionals (MVP)
 
-- `id`, `slug` (URL path), `name`, `description` (shown to student)
-- `durationMinutes`
-- `allowRecurring` (boolean), `recurringCount` (number of repeated bookings when recurring is on)
-- `availability` — weekly pattern (e.g. weekdays + start/end time per day)
-- Mandatory booking fields (v1): first name, last name, email, phone (fixed; no custom fields)
+- `id`, `clerk_user_id` (Clerk), `email`, `full_name`, `profile_slug` (URL path, unique, not reserved), `time_zone` (IANA).
+- Created on first authenticated request when using Postgres.
 
-**Booking**
+### Clients (MVP)
 
-- `id`, `eventTypeId`, `startTime`, `endTime`
-- `firstName`, `lastName`, `email`, `phone`
-- Optional: `recurringGroupId` when multiple sessions are created in one recurring booking
+- `id`, `email`, `first_name`, `last_name`, `phone`.
+- Unique by `(email, first_name, last_name)`. One row per guest; bookings reference `client_id`. Upserted on each booking when using Postgres.
 
-**Availability**
+### Slug redirects (MVP)
 
-- Stored on EventType as a weekly pattern (e.g. Mon 9–12, Wed 14–17). Slot generation = intersect this with calendar days, then remove already-booked slots.
+- `old_slug`, `professional_id`. When a professional changes `profile_slug`, the old slug is stored so `/:oldSlug` can 301 redirect to `/:currentSlug`.
 
-### Database schema (Postgres)
+### EventType (MVP)
 
-When using Postgres, the same concepts map to two tables.
+- `id`, `professional_id`, `slug` (globally unique for `/book/:slug`), `name`, `description`, `duration_minutes`, `allow_recurring`, `recurring_count`, `availability` (weekly pattern), `location`, `time_zone`, `price_dollars`.
+- List/create/update scoped to the logged-in professional; GET by slug is public.
 
-**event_types**
+### Booking (MVP)
 
-| Column             | Type                         | Notes                    |
-| ------------------ | ---------------------------- | ------------------------ |
-| id                 | SERIAL PRIMARY KEY           |                          |
-| slug               | VARCHAR(255) UNIQUE NOT NULL |                          |
-| name               | VARCHAR(255) NOT NULL        |                          |
-| description        | TEXT                         | Default ''               |
-| duration_minutes   | INTEGER NOT NULL             | Default 30               |
-| allow_recurring    | BOOLEAN NOT NULL             | Default false            |
-| recurring_count    | INTEGER NOT NULL             | Default 1 (clamped 1–52) |
-| availability       | JSONB NOT NULL               | Array of `{day, start, end}`; default `[]` |
+- `id`, `event_type_id`, `client_id` (optional), `start_time`, `end_time`, `duration_minutes`, `first_name`, `last_name`, `email`, `phone`, `recurring_group_id`, `notes`.
+- Guest fields kept on booking for display; `client_id` links to `clients` when Postgres is used.
 
-**bookings**
+### Availability
 
-| Column             | Type                                        | Notes    |
-| ------------------ | ------------------------------------------- | -------- |
-| id                 | SERIAL PRIMARY KEY                          |          |
-| event_type_id      | INTEGER NOT NULL REFERENCES event_types(id) |          |
-| start_time         | TIMESTAMPTZ NOT NULL                        |          |
-| end_time           | TIMESTAMPTZ NOT NULL                        |          |
-| first_name         | VARCHAR(255) NOT NULL                       |          |
-| last_name          | VARCHAR(255) NOT NULL                       |          |
-| email              | VARCHAR(255) NOT NULL                       |          |
-| phone              | VARCHAR(255)                                |          |
-| recurring_group_id | VARCHAR(255)                                | Nullable |
+- Stored on EventType as a weekly pattern. Slot generation uses event type `time_zone`; intersects availability with calendar days and subtracts already-booked slots; returns UTC ISO with Z.
 
-**Indexes:** `event_types(slug)`, `bookings(event_type_id)`, `bookings(start_time)`.
+---
+
+## Database schema (Postgres MVP)
+
+When using Postgres, use the MVP schema: `server/db/schema-mvp.sql`, run with `npm run db:migrate-mvp` (drops and recreates).
+
+**Tables:** `professionals`, `clients`, `slug_redirects`, `event_types` (with `professional_id`, `time_zone`, `price_dollars`, `location`), `bookings` (with `client_id`, `notes`, `duration_minutes`). See schema file and [docs/MVP_IMPLEMENTATION_PLAN.md](docs/MVP_IMPLEMENTATION_PLAN.md) for column details.
 
 ---
 
 ## API
 
-| Method | Path                                           | Purpose |
-| ------ | ---------------------------------------------- | ------- |
-| GET    | `/api/event-types`                             | List (instructor UI). |
-| GET    | `/api/event-types/:slug`                       | Public details for booking page. |
-| GET    | `/api/event-types/:slug/slots?date=YYYY-MM-DD` | Available start times for a given day. |
-| POST   | `/api/bookings`                                | Create booking(s); body: eventTypeSlug, startTime, firstName, lastName, email, phone. |
-| POST   | `/api/event-types`                             | Create event type (instructor). |
-| GET    | `/api/event-types/id/:id`                      | Get one by id (instructor edit). |
-| PATCH  | `/api/event-types/:id`                         | Update event type. |
-| GET    | `/api/bookings`                                | List all (instructor calendar). |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/health` | No | Store type (postgres / file). |
+| GET | `/api/professionals/reserved-slugs` | No | Reserved path segments. |
+| GET | `/api/professionals/by-slug/:slug` | No | Redirect or profile slug resolution. |
+| GET | `/api/professionals/me` | Yes | Current professional. |
+| PATCH | `/api/professionals/me` | Yes | Update full_name, profile_slug, time_zone. |
+| GET | `/api/event-types` | Yes | List event types (scoped). |
+| GET | `/api/event-types/id/:id` | Yes | Get one by id (edit). |
+| GET | `/api/event-types/:slug` | No | Public details for booking page. |
+| GET | `/api/event-types/:slug/slots?date=YYYY-MM-DD` | No | Available start times (timezone-aware). |
+| POST | `/api/event-types` | Yes | Create event type. |
+| PATCH | `/api/event-types/:id` | Yes | Update event type. |
+| GET | `/api/bookings` | Yes | List bookings (scoped). |
+| GET | `/api/bookings/:id` | Yes | Get one booking. |
+| PATCH | `/api/bookings/:id` | Yes | Update booking (overlap check). |
+| DELETE | `/api/bookings/:id` | Yes | Delete booking. |
+| POST | `/api/bookings` | No | Create booking(s) (student). |
 
-No auth in v1; optional shared secret for mutation APIs.
+Auth = `Authorization: Bearer <Clerk session token>`. See [docs/API.md](docs/API.md) for full request/response shapes and errors.
 
 ---
 
 ## Flows
 
-For a route-to-page map, page-to-API table, and sequence diagrams, see [docs/INTERACTIONS.md](docs/INTERACTIONS.md).
+For route→page map, page→API table, and sequence diagrams, see [docs/INTERACTIONS.md](docs/INTERACTIONS.md).
+
+**Auth**
+
+1. Professional visits `/setup` or `/:professionalSlug` → ProtectedRoute checks Clerk; if not signed in, redirect to `/sign-in`.
+2. After sign-in/sign-up, redirect to `/setup` (or intended URL). Client sends Bearer token for protected API calls.
 
 **Student**
 
-1. Landing page → click booking link.
-2. `/book/:slug` → load event type (name, description, duration).
-3. Calendar → pick day → `GET /api/event-types/:slug/slots?date=…` → pick slot.
-4. Form (first name, last name, email, phone) → `POST /api/bookings` → success; optional “add to calendar” link.
+1. Opens booking link `/book/:slug` (no auth).
+2. Load event type (name, description, duration, price, time zone).
+3. Pick day → GET slots for that date (timezone-aware) → pick slot.
+4. Form (first name, last name, email, phone) → POST /api/bookings. Client upserted (if Postgres); bookings created with client_id.
+5. On success: confirmation emails sent to client and professional (if Resend configured); optional add-to-calendar link; link in email to `/booking/placeholder` (cancel/edit coming soon).
 
 **Instructor**
 
-1. `/setup` → list event types (slug, name, duration, booking URL).
-2. Create or edit: name, slug, description, duration, weekly availability, recurring toggle + count.
-3. Copy booking URL to share.
+1. `/setup` or `/:professionalSlug` (own slug) → list event types, create/edit, view bookings.
+2. Create or edit event type: name, slug, description, duration, availability, recurring, location, time zone, price.
+3. Copy booking URL to share. Bookings calendar: month/week/day; click booking → edit page (date, time, duration, contact, notes); PATCH with overlap check; DELETE.
 
-**Recurring bookings**
+**Slug redirects**
 
-- When an event type has “Allow recurring” and a count (e.g. 4), one student submit creates N bookings at the same weekday/time, N weeks in a row (e.g. Wed 10:00 for 4 weeks).
+- When professional changes profile_slug, old slug is stored. Visiting `/:oldSlug` returns redirectTo → client navigates to `/:currentSlug`.
 
 ---
 
@@ -141,40 +157,37 @@ For a route-to-page map, page-to-API table, and sequence diagrams, see [docs/INT
 
 **File store** (`server/db/store-file.js`)
 
-- JSON files in `server/db/` locally, or in `/tmp` on Vercel.
-- On Vercel, `/tmp` is ephemeral and not shared between serverless invocations, so opening the booking link in a new window can hit an instance with no data (“Event type not found”).
+- JSON files in `server/db/` locally or `/tmp` on Vercel (ephemeral).
+- Professionals and clients stubs return null/reject (Auth requires Postgres). Event types and bookings work for local dev without DB.
 
 **Postgres** (`server/db/store-pg.js`)
 
-- When `POSTGRES_URL` or `DATABASE_URL` is set, the app uses Postgres. Same store API (`store.eventTypes.*`, `store.bookings.*`); only the implementation changes.
-- All instances share the same database, so data persists and the booking link works from any request.
+- When `POSTGRES_URL` or `DATABASE_URL` is set, the app uses Postgres. Same store API; professionals, clients, slug_redirects, scoped event types and bookings, and clients.upsert + client_id on bookings are fully supported.
 
-```mermaid
-flowchart LR
-  subgraph fileStore [File store]
-    API1[routes]
-    FS[store.js]
-    API1 --> FS
-    FS --> JSON[JSON files]
-  end
-  subgraph withDb [With Postgres]
-    API2[routes]
-    StoreDB[store.js same API]
-    API2 --> StoreDB
-    StoreDB --> PG[(Postgres)]
-  end
-```
+**Switcher:** `server/db/store.js` exports Postgres store when `POSTGRES_URL` is set, else file store.
 
-**Switcher:** `server/db/store.js` exports the Postgres store when `POSTGRES_URL` is set, else the file store. No route or client changes.
+---
 
-Setup and rollout (migration, seed, risk, rollback): [planning.md](planning.md) Part 2.
+## Environment variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `POSTGRES_URL` or `DATABASE_URL` | No (optional) | When set, use Postgres; otherwise file store. Auth and clients require Postgres. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes (for auth) | Clerk publishable key (client). |
+| `CLERK_SECRET_KEY` | Yes (for auth) | Clerk secret key (server). |
+| `RESEND_API_KEY` | No | When set, send booking confirmation emails via Resend. |
+| `EMAIL_FROM` | No | From address for email (e.g. `Lesson Scheduler <onboarding@resend.dev>`). |
+| `BASE_URL` | No | Absolute base URL for links in emails (e.g. `https://your-app.vercel.app`). |
+
+See `.env.example` and [docs/API.md](docs/API.md).
 
 ---
 
 ## Project layout
 
-| Path            | Purpose |
-| --------------- | ------- |
-| `server/`       | Express API: routes (event types, slots, bookings), `db/` (store, schema, migrations). |
-| `client/`       | React SPA: landing, booking page, instructor setup and calendar. |
-| `api/`          | Vercel serverless entry: `api/[[...path]].js` forwards to Express so `/api/*` works on Vercel. |
+| Path | Purpose |
+|------|---------|
+| `server/` | Express API: auth middleware, routes (professionals, event-types, slots, bookings), services (email), db (store, schema, migrations). |
+| `client/` | React SPA: sign-in/sign-up, booking page, instructor setup and calendar, placeholder page; ClerkProvider, protected routes, basePath for /setup and /:professionalSlug. |
+| `api/` | Vercel serverless: `api/[[...path]].js` forwards to Express. |
+| `docs/` | API.md, FILES.md, INTERACTIONS.md, MVP_IMPLEMENTATION_PLAN.md, MVP_IMPLEMENTATION_SUMMARY.md, POSTGRES_SETUP.md. |

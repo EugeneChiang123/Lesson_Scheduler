@@ -348,6 +348,8 @@ Create one or more bookings (student). Each created booking gets its duration fr
 
 For recurring: `count` is the number of bookings created; `recurringGroupId` is a non-null string tying them together.
 
+When Resend is configured (`RESEND_API_KEY`, `EMAIL_FROM`), confirmation emails are sent to the client and the professional. If sending fails, the response still returns `201` and may include `emailSent: false` and `emailError` (string). Optional env: `BASE_URL` for absolute links in emails (e.g. `https://your-app.vercel.app`).
+
 **Errors:**
 
 - `400` — validation or business rule, e.g.:
@@ -357,6 +359,21 @@ For recurring: `count` is the number of bookings created; `recurringGroupId` is 
 - `404` — `{ "error": "Event type not found" }`
 - `409` — `{ "error": "Slot no longer available", "conflictingStart": "..." }` when the slot was taken between load and submit
 - `500` — server error
+
+---
+
+## Environment variables
+
+Used by the server (and client for Clerk key). See `.env.example` for a template.
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `POSTGRES_URL` or `DATABASE_URL` | No | When set, use Postgres; otherwise file store. Auth and clients require Postgres. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes (for auth) | Clerk publishable key; exposed to client. |
+| `CLERK_SECRET_KEY` | Yes (for auth) | Clerk secret key; server only, never expose to client. |
+| `RESEND_API_KEY` | No | When set, send booking confirmation emails (Resend). |
+| `EMAIL_FROM` | No | From address for email (e.g. `Lesson Scheduler <onboarding@resend.dev>`). |
+| `BASE_URL` | No | Base URL for absolute links in emails (e.g. `https://your-app.vercel.app`). |
 
 ---
 

@@ -2,6 +2,7 @@ const express = require('express');
 const store = require('../db/store');
 const { clampRecurringCount } = store;
 const { getSlotsForDate } = require('./slots');
+const { sendBookingConfirmation } = require('../services/email');
 
 const router = express.Router();
 
@@ -241,10 +242,28 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'Slot no longer available', conflictingStart: result.conflictingStart });
     }
 
+    let emailResult = { sent: false };
+    const professionalId = eventType.professionalId ?? eventType.professional_id;
+    if (professionalId) {
+      const professional = await store.professionals.getById(professionalId);
+      const baseUrl = req.protocol && req.get('host') ? `${req.protocol}://${req.get('host')}` : process.env.BASE_URL || '';
+      emailResult = await sendBookingConfirmation({
+        created: result.created,
+        eventType: {
+          name: eventType.name,
+          durationMinutes: eventType.durationMinutes ?? eventType.duration_minutes,
+          location: eventType.location || '',
+        },
+        professional: professional ? { fullName: professional.fullName ?? professional.full_name, email: professional.email } : null,
+        baseUrl,
+      });
+    }
+
     res.status(201).json({
       success: true,
       count: result.created.length,
       recurringGroupId,
+      ...(emailResult.sent === false && { emailSent: false, emailError: emailResult.error }),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
