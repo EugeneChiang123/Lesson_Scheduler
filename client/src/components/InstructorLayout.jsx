@@ -8,7 +8,7 @@ export default function InstructorLayout() {
   const basePath = getBasePath(path);
 
   const isScheduling = path === basePath || path.startsWith(`${basePath}/new`) || path.includes('/edit');
-  const isBookings = path === `${basePath}/bookings`;
+  const isBookings = path === `${basePath}/bookings` || path.startsWith(`${basePath}/bookings/`);
 
   return (
     <div style={styles.container}>
