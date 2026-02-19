@@ -349,10 +349,19 @@ const store = {
     async createBatchIfNoConflict(eventTypeId, slots, guest) {
       return withGlobalBookingMutex(() => {
         const list = readBookings();
+        const eventTypes = readEventTypes();
+        const myEt = eventTypes.find((e) => Number(e.id) === Number(eventTypeId));
+        const professionalId = myEt != null ? Number(myEt.professional_id ?? myEt.professionalId) : null;
+        const eventTypeIdsForProfessional = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === professionalId)
+            .map((e) => Number(e.id))
+        );
         for (const slot of slots) {
           const start = slot.start_time.replace(' ', 'T');
           const end = slot.end_time.replace(' ', 'T');
           const found = list.find((b) => {
+            if (professionalId != null && !eventTypeIdsForProfessional.has(Number(b.event_type_id))) return false;
             const bStart = b.start_time.replace(' ', 'T');
             const bEnd = b.end_time.replace(' ', 'T');
             return start < bEnd && end > bStart;

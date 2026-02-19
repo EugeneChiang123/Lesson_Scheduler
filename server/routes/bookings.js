@@ -111,6 +111,10 @@ router.patch('/:id', async (req, res) => {
       duration_minutes = Math.max(1, computed) || existingDuration;
     }
 
+    // Normalize to UTC ISO (with Z) so Postgres interprets both consistently; otherwise session TZ can mis-interpret start vs end.
+    start_time = ensureUtcIso(start_time);
+    end_time = ensureUtcIso(end_time);
+
     const data = {
       first_name: firstName !== undefined ? firstName : existing.first_name,
       last_name: lastName !== undefined ? lastName : existing.last_name,
@@ -160,6 +164,16 @@ function addMinutes(isoStr, minutes) {
   const s = (isoStr || '').trim().replace(' ', 'T');
   const d = new Date(s.includes('Z') ? s : s + 'Z');
   d.setUTCMinutes(d.getUTCMinutes() + minutes);
+  return d.toISOString().slice(0, 19) + 'Z';
+}
+
+/** Normalize time string to UTC ISO with Z so Postgres ::timestamptz interprets consistently. */
+function ensureUtcIso(s) {
+  if (!s || typeof s !== 'string') return s;
+  const t = s.trim().replace(' ', 'T').substring(0, 19);
+  const withZ = t.includes('Z') ? t : t + 'Z';
+  const d = new Date(withZ);
+  if (Number.isNaN(d.getTime())) return s;
   return d.toISOString().slice(0, 19) + 'Z';
 }
 
