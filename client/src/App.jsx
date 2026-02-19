@@ -11,6 +11,25 @@ import BookingPlaceholderPage from './pages/BookingPlaceholderPage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 
+/** Shared child routes for /setup and /:professionalSlug (single source of truth). */
+const instructorChildRoutes = [
+  { index: true, element: <SetupHome />, key: 'index' },
+  { path: 'bookings/:bookingId', element: <EventEditPage />, key: 'bookings-id' },
+  { path: 'bookings', element: <BookingsCalendar />, key: 'bookings' },
+  { path: 'new', element: <SetupEventForm />, key: 'new' },
+  { path: ':id/edit', element: <SetupEventForm />, key: 'edit' },
+];
+
+function renderInstructorChildRoutes() {
+  return instructorChildRoutes.map((r) =>
+    r.index ? (
+      <Route key={r.key} index element={r.element} />
+    ) : (
+      <Route key={r.key} path={r.path} element={r.element} />
+    )
+  );
+}
+
 export default function App() {
   return (
     <Routes>
@@ -27,11 +46,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<SetupHome />} />
-        <Route path="bookings/:bookingId" element={<EventEditPage />} />
-        <Route path="bookings" element={<BookingsCalendar />} />
-        <Route path="new" element={<SetupEventForm />} />
-        <Route path=":id/edit" element={<SetupEventForm />} />
+        {renderInstructorChildRoutes()}
       </Route>
       <Route
         path="/:professionalSlug"
@@ -42,11 +57,7 @@ export default function App() {
         }
       >
         <Route element={<InstructorLayout />}>
-          <Route index element={<SetupHome />} />
-          <Route path="bookings/:bookingId" element={<EventEditPage />} />
-          <Route path="bookings" element={<BookingsCalendar />} />
-          <Route path="new" element={<SetupEventForm />} />
-          <Route path=":id/edit" element={<SetupEventForm />} />
+          {renderInstructorChildRoutes()}
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
