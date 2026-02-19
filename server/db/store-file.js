@@ -299,6 +299,7 @@ const store = {
         const eventTypes = readEventTypes();
         const myEventType = eventTypes.find((e) => Number(e.id) === Number(row.event_type_id));
         const professionalId = myEventType != null ? Number(myEventType.professional_id ?? myEventType.professionalId) : null;
+        // Scope overlap check to same professional so one pro's edit doesn't conflict with another's.
         const eventTypeIdsForProfessional = new Set(
           eventTypes
             .filter((e) => Number(e.professional_id ?? e.professionalId) === professionalId)
