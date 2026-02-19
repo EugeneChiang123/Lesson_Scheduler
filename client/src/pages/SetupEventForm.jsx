@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { theme } from '../styles/theme';
-
-const API = '/api';
+import { getBasePath } from '../utils/basePath';
+import { useApi } from '../api';
 const DAYS = [{ id: 0, label: 'Sun' }, { id: 1, label: 'Mon' }, { id: 2, label: 'Tue' }, { id: 3, label: 'Wed' }, { id: 4, label: 'Thu' }, { id: 5, label: 'Fri' }, { id: 6, label: 'Sat' }];
 
 const emptyForm = {
@@ -10,6 +10,7 @@ const emptyForm = {
   name: '',
   description: '',
   durationMinutes: 30,
+  location: '',
   allowRecurring: false,
   recurringCount: 4,
   availability: [],
@@ -18,6 +19,9 @@ const emptyForm = {
 export default function SetupEventForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = getBasePath(location.pathname);
+  const { apiFetch } = useApi();
   const isEdit = Boolean(id);
   const [loading, setLoading] = useState(isEdit);
   const [form, setForm] = useState(emptyForm);
@@ -25,7 +29,7 @@ export default function SetupEventForm() {
 
   useEffect(() => {
     if (!isEdit) return;
-    fetch(`${API}/event-types/id/${id}`)
+    apiFetch(`/event-types/id/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Not found'))))
       .then((et) => {
         setForm({
@@ -33,14 +37,15 @@ export default function SetupEventForm() {
           name: et.name,
           description: et.description || '',
           durationMinutes: et.durationMinutes ?? 30,
+          location: et.location ?? '',
           allowRecurring: et.allowRecurring ?? false,
           recurringCount: et.recurringCount ?? 4,
           availability: Array.isArray(et.availability) ? et.availability : [],
         });
       })
-      .catch(() => navigate('/setup'))
+      .catch(() => navigate(basePath))
       .finally(() => setLoading(false));
-  }, [id, isEdit, navigate]);
+  }, [id, isEdit, navigate, apiFetch, basePath]);
 
   const addWindow = (day) => {
     setForm((f) => ({
@@ -64,11 +69,11 @@ export default function SetupEventForm() {
     const payload = { ...form, availability: form.availability };
     setSaving(true);
     const promise = isEdit
-      ? fetch(`${API}/event-types/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      : fetch(`${API}/event-types`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      ? apiFetch(`/event-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      : apiFetch('/event-types', { method: 'POST', body: JSON.stringify(payload) });
     promise
       .then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(new Error(d.error || 'Failed')))))
-      .then(() => navigate('/setup'))
+      .then(() => navigate(basePath))
       .catch((e) => { alert(e.message); setSaving(false); });
   };
 
@@ -121,6 +126,15 @@ export default function SetupEventForm() {
               <option key={n} value={n}>{n} min</option>
             ))}
           </select>
+        </div>
+        <div style={styles.field}>
+          <label>Location</label>
+          <input
+            value={form.location}
+            onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+            placeholder="e.g. Room 3, Zoom link"
+            style={styles.input}
+          />
         </div>
         <div style={styles.field}>
           <label style={styles.checkLabel}>
@@ -179,7 +193,7 @@ export default function SetupEventForm() {
           <button type="button" style={styles.primaryBtn} onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <Link to="/setup" style={styles.cancelLink}>Cancel</Link>
+          <Link to={basePath} style={styles.cancelLink}>Cancel</Link>
         </div>
       </section>
     </div>

@@ -3,10 +3,11 @@ const store = require('../db/store');
 
 const router = express.Router();
 
-// GET /api/event-types - list all (instructor UI)
+// GET /api/event-types - list all for current professional (instructor UI)
 router.get('/', async (req, res) => {
   try {
-    const rows = await store.eventTypes.all();
+    const professionalId = req.professionalId;
+    const rows = await store.eventTypes.all(professionalId);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -18,6 +19,9 @@ router.get('/id/:id', async (req, res) => {
   try {
     const row = await store.eventTypes.getById(req.params.id);
     if (!row) return res.status(404).json({ error: 'Event type not found' });
+    if (req.professionalId != null && row.professionalId !== req.professionalId) {
+      return res.status(404).json({ error: 'Event type not found' });
+    }
     res.json(row);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -38,9 +42,12 @@ router.get('/:slug', async (req, res) => {
 // POST /api/event-types - create
 router.post('/', async (req, res) => {
   try {
-    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
+    const professionalId = req.professionalId;
+    if (professionalId == null) return res.status(401).json({ error: 'Authorization required' });
+    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location, time_zone, timeZone, price_dollars, priceDollars } = req.body;
     if (!slug || !name) return res.status(400).json({ error: 'slug and name required' });
     const row = await store.eventTypes.create({
+      professional_id: professionalId,
       slug,
       name: name || '',
       description: description || '',
@@ -48,6 +55,9 @@ router.post('/', async (req, res) => {
       allowRecurring: Boolean(allowRecurring),
       recurringCount: recurringCount ?? 1,
       availability: availability || [],
+      location: location != null ? location : '',
+      time_zone: time_zone || timeZone,
+      price_dollars: price_dollars ?? priceDollars,
     });
     res.status(201).json(row);
   } catch (err) {
@@ -62,7 +72,10 @@ router.patch('/:id', async (req, res) => {
     const id = req.params.id;
     const existing = await store.eventTypes.getById(id);
     if (!existing) return res.status(404).json({ error: 'Event type not found' });
-    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability } = req.body;
+    if (req.professionalId != null && existing.professionalId !== req.professionalId) {
+      return res.status(404).json({ error: 'Event type not found' });
+    }
+    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location, time_zone, timeZone, price_dollars, priceDollars } = req.body;
     const updated = await store.eventTypes.update(id, {
       slug,
       name,
@@ -71,6 +84,9 @@ router.patch('/:id', async (req, res) => {
       allowRecurring,
       recurringCount,
       availability,
+      location,
+      time_zone: time_zone ?? timeZone,
+      price_dollars: price_dollars ?? priceDollars,
     });
     res.json(updated);
   } catch (err) {

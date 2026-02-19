@@ -38,6 +38,12 @@ async function withBookingMutex(eventTypeId, fn) {
   }
 }
 
+/** Global mutex for PATCH update: overlap check and write must be atomic with all other booking writes. */
+const GLOBAL_BOOKING_MUTEX_KEY = Symbol('global');
+async function withGlobalBookingMutex(fn) {
+  return withBookingMutex(GLOBAL_BOOKING_MUTEX_KEY, fn);
+}
+
 function clampRecurringCount(n) {
   const val = Number.isFinite(n) ? Math.round(Number(n)) : 1;
   return Math.min(MAX_RECURRING_COUNT, Math.max(1, val));
@@ -71,6 +77,38 @@ function writeBookings(data) {
   fs.writeFileSync(bookingsPath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/** Derive duration in minutes from start/end when not stored */
+function deriveDurationMinutes(startTime, endTime) {
+  if (!startTime || !endTime) return 30;
+  const start = new Date(startTime.replace(' ', 'T'));
+  const end = new Date(endTime.replace(' ', 'T'));
+  return Math.round((end - start) / 60000) || 30;
+}
+
+/** Ensure booking has notes and duration_minutes for API consistency */
+function normalizeBooking(b) {
+  const duration_minutes = b.duration_minutes != null ? b.duration_minutes : deriveDurationMinutes(b.start_time, b.end_time);
+  return { ...b, notes: b.notes ?? '', duration_minutes };
+}
+
+function toEventType(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    professionalId: row.professional_id != null ? row.professional_id : row.professionalId,
+    slug: row.slug,
+    name: row.name,
+    description: row.description || '',
+    durationMinutes: row.durationMinutes ?? row.duration_minutes ?? 30,
+    allowRecurring: Boolean(row.allowRecurring ?? row.allow_recurring),
+    recurringCount: row.recurringCount ?? row.recurring_count ?? 1,
+    availability: Array.isArray(row.availability) ? row.availability : [],
+    location: row.location || '',
+    timeZone: row.timeZone || row.time_zone || 'America/Los_Angeles',
+    priceDollars: row.priceDollars != null ? Number(row.priceDollars) : (row.price_dollars != null ? Number(row.price_dollars) : 0),
+  };
+}
+
 let eventTypeId = 1;
 let bookingId = 1;
 
@@ -84,15 +122,51 @@ initIds();
 
 const store = {
   clampRecurringCount,
+  professionals: {
+    getByClerkId() {
+      return Promise.resolve(null);
+    },
+    getById() {
+      return Promise.resolve(null);
+    },
+    getByProfileSlug() {
+      return Promise.resolve(null);
+    },
+    create() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+    update() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+  },
+  slug_redirects: {
+    insert() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+    getRedirect() {
+      return Promise.resolve(null);
+    },
+  },
+  clients: {
+    upsert() {
+      return Promise.reject(new Error('Auth requires Postgres'));
+    },
+  },
   eventTypes: {
-    all() {
-      return Promise.resolve(readEventTypes());
+    all(professional_id) {
+      const list = readEventTypes();
+      const raw = professional_id != null
+        ? list.filter((e) => Number(e.professional_id ?? e.professionalId) === Number(professional_id))
+        : list;
+      return Promise.resolve(raw.map(toEventType));
     },
     getBySlug(slug) {
-      return Promise.resolve(readEventTypes().find((e) => e.slug === slug) || null);
+      const row = readEventTypes().find((e) => e.slug === slug) || null;
+      return Promise.resolve(toEventType(row));
     },
     getById(id) {
-      return Promise.resolve(readEventTypes().find((e) => e.id === Number(id)) || null);
+      const row = readEventTypes().find((e) => e.id === Number(id)) || null;
+      return Promise.resolve(toEventType(row));
     },
     create(data) {
       const list = readEventTypes();
@@ -101,6 +175,7 @@ const store = {
       if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationMinutes must be a positive number');
       const row = {
         id: eventTypeId++,
+        professional_id: data.professional_id != null ? Number(data.professional_id) : null,
         slug: data.slug,
         name: data.name,
         description: data.description || '',
@@ -108,10 +183,13 @@ const store = {
         allowRecurring: Boolean(data.allowRecurring),
         recurringCount: clampRecurringCount(data.recurringCount ?? 1),
         availability: Array.isArray(data.availability) ? data.availability : [],
+        location: data.location != null ? String(data.location) : '',
+        timeZone: data.time_zone || data.timeZone || 'America/Los_Angeles',
+        priceDollars: data.price_dollars != null ? Number(data.price_dollars) : (data.priceDollars != null ? Number(data.priceDollars) : 0),
       };
       list.push(row);
       writeEventTypes(list);
-      return Promise.resolve(row);
+      return Promise.resolve(toEventType(row));
     },
     update(id, data) {
       const list = readEventTypes();
@@ -130,15 +208,35 @@ const store = {
         allowRecurring: data.allowRecurring !== undefined ? Boolean(data.allowRecurring) : row.allowRecurring,
         recurringCount: data.recurringCount !== undefined ? clampRecurringCount(data.recurringCount) : clampRecurringCount(row.recurringCount),
         availability: data.availability !== undefined ? data.availability : row.availability,
+        location: data.location !== undefined ? (data.location != null ? String(data.location) : '') : (row.location || ''),
+        timeZone: data.time_zone !== undefined || data.timeZone !== undefined ? (data.time_zone || data.timeZone || row.timeZone || 'America/Los_Angeles') : (row.timeZone || 'America/Los_Angeles'),
+        priceDollars: data.price_dollars !== undefined || data.priceDollars !== undefined ? Number(data.price_dollars ?? data.priceDollars ?? row.priceDollars ?? 0) : (row.priceDollars != null ? Number(row.priceDollars) : 0),
       };
       list[idx] = updated;
       writeEventTypes(list);
-      return Promise.resolve(updated);
+      return Promise.resolve(toEventType(updated));
     },
   },
   bookings: {
-    list() {
-      return Promise.resolve(readBookings());
+    list(professional_id) {
+      const list = readBookings();
+      if (professional_id != null) {
+        const eventTypes = readEventTypes();
+        const pid = Number(professional_id);
+        const eventTypeIds = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === pid)
+            .map((e) => e.id)
+        );
+        const filtered = list.filter((b) => eventTypeIds.has(Number(b.event_type_id)));
+        return Promise.resolve(filtered.map(normalizeBooking));
+      }
+      return Promise.resolve(list.map(normalizeBooking));
+    },
+    getById(id) {
+      const list = readBookings();
+      const b = list.find((x) => x.id === Number(id)) || null;
+      return Promise.resolve(b ? normalizeBooking(b) : null);
     },
     getByEventTypeAndDate(eventTypeId, dateStr) {
       const list = readBookings().filter(
@@ -148,10 +246,21 @@ const store = {
     },
     getBookingsOnDate(dateStr) {
       const list = readBookings().filter((b) => {
-        const s = b.start_time.replace(' ', 'T');
-        return s.startsWith(dateStr);
+        const s = (b.start_time || '').replace(' ', 'T');
+        return s.startsWith(dateStr.substring(0, 10));
       });
       return Promise.resolve(list);
+    },
+    getBookingsForEventTypeInRange(eventTypeId, utcStartIso, utcEndIso) {
+      const start = (utcStartIso || '').replace(' ', 'T').substring(0, 19);
+      const end = (utcEndIso || '').replace(' ', 'T').substring(0, 19);
+      const list = readBookings().filter((b) => {
+        if (Number(b.event_type_id) !== Number(eventTypeId)) return false;
+        const bStart = (b.start_time || '').replace(' ', 'T').substring(0, 19);
+        const bEnd = (b.end_time || '').replace(' ', 'T').substring(0, 19);
+        return bStart < end && bEnd > start;
+      });
+      return Promise.resolve(list.map(normalizeBooking));
     },
     findOverlapping(startTime, endTime) {
       const list = readBookings();
@@ -166,27 +275,94 @@ const store = {
     },
     insert(record) {
       const list = readBookings();
-      const row = { id: bookingId++, ...record };
+      const duration_minutes = record.duration_minutes != null ? record.duration_minutes : deriveDurationMinutes(record.start_time, record.end_time);
+      const row = { id: bookingId++, ...record, notes: record.notes ?? '', duration_minutes };
       list.push(row);
       writeBookings(list);
-      return Promise.resolve(row);
+      return Promise.resolve(normalizeBooking(row));
+    },
+    /**
+     * Atomically check for overlaps then update (under global mutex). Prevents double-booking
+     * when a concurrent POST or PATCH could insert/move into the same slot.
+     * @returns {Promise<{ updated: object } | { notFound: true } | { conflict: true, conflictingStart: string }>}
+     */
+    async updateIfNoConflict(id, data) {
+      return withGlobalBookingMutex(() => {
+        const list = readBookings();
+        const idx = list.findIndex((b) => b.id === Number(id));
+        if (idx === -1) return Promise.resolve({ notFound: true });
+        const row = list[idx];
+        const start_time = data.start_time !== undefined ? data.start_time : row.start_time;
+        const end_time = data.end_time !== undefined ? data.end_time : row.end_time;
+        const start = start_time.replace(' ', 'T');
+        const end = end_time.replace(' ', 'T');
+        const eventTypes = readEventTypes();
+        const myEventType = eventTypes.find((e) => Number(e.id) === Number(row.event_type_id));
+        const professionalId = myEventType != null ? Number(myEventType.professional_id ?? myEventType.professionalId) : null;
+        // Scope overlap check to same professional so one pro's edit doesn't conflict with another's.
+        const eventTypeIdsForProfessional = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === professionalId)
+            .map((e) => Number(e.id))
+        );
+        const overlapping = list.find((b) => {
+          if (b.id === Number(id)) return false;
+          if (professionalId != null && !eventTypeIdsForProfessional.has(Number(b.event_type_id))) return false;
+          const bStart = b.start_time.replace(' ', 'T');
+          const bEnd = b.end_time.replace(' ', 'T');
+          return start < bEnd && end > bStart;
+        });
+        if (overlapping) return Promise.resolve({ conflict: true, conflictingStart: overlapping.start_time });
+        const duration_minutes = data.duration_minutes !== undefined ? data.duration_minutes : (row.duration_minutes != null ? row.duration_minutes : deriveDurationMinutes(row.start_time, row.end_time));
+        const updated = {
+          ...row,
+          first_name: data.first_name !== undefined ? data.first_name : row.first_name,
+          last_name: data.last_name !== undefined ? data.last_name : row.last_name,
+          email: data.email !== undefined ? data.email : row.email,
+          phone: data.phone !== undefined ? data.phone : row.phone,
+          start_time,
+          end_time,
+          notes: data.notes !== undefined ? data.notes : (row.notes ?? ''),
+          duration_minutes,
+        };
+        list[idx] = updated;
+        writeBookings(list);
+        return Promise.resolve({ updated: normalizeBooking(updated) });
+      });
+    },
+    delete(id) {
+      const list = readBookings();
+      const idx = list.findIndex((b) => b.id === Number(id));
+      if (idx === -1) return Promise.resolve(false);
+      list.splice(idx, 1);
+      writeBookings(list);
+      return Promise.resolve(true);
     },
 
     /**
-     * Atomically check for overlaps and insert all slots under a mutex per event type.
-     * Prevents two concurrent requests from double-booking the same slot.
+     * Atomically check for overlaps and insert all slots under global booking mutex.
+     * Prevents two concurrent requests (POST or PATCH) from double-booking the same slot.
      * @param {number} eventTypeId
      * @param {{ start_time: string, end_time: string }[]} slots
      * @param {{ first_name: string, last_name: string, email: string, phone?: string, recurring_group_id?: string }} guest
      * @returns {Promise<{ created: object[] } | { conflict: true, conflictingStart: string }>}
      */
     async createBatchIfNoConflict(eventTypeId, slots, guest) {
-      return withBookingMutex(eventTypeId, () => {
+      return withGlobalBookingMutex(() => {
         const list = readBookings();
+        const eventTypes = readEventTypes();
+        const myEt = eventTypes.find((e) => Number(e.id) === Number(eventTypeId));
+        const professionalId = myEt != null ? Number(myEt.professional_id ?? myEt.professionalId) : null;
+        const eventTypeIdsForProfessional = new Set(
+          eventTypes
+            .filter((e) => Number(e.professional_id ?? e.professionalId) === professionalId)
+            .map((e) => Number(e.id))
+        );
         for (const slot of slots) {
           const start = slot.start_time.replace(' ', 'T');
           const end = slot.end_time.replace(' ', 'T');
           const found = list.find((b) => {
+            if (professionalId != null && !eventTypeIdsForProfessional.has(Number(b.event_type_id))) return false;
             const bStart = b.start_time.replace(' ', 'T');
             const bEnd = b.end_time.replace(' ', 'T');
             return start < bEnd && end > bStart;
@@ -195,9 +371,11 @@ const store = {
         }
         const created = [];
         for (const slot of slots) {
+          const duration_minutes = slot.duration_minutes != null ? slot.duration_minutes : deriveDurationMinutes(slot.start_time, slot.end_time);
           const row = {
             id: bookingId++,
             event_type_id: eventTypeId,
+            client_id: guest.client_id != null ? guest.client_id : null,
             start_time: slot.start_time,
             end_time: slot.end_time,
             first_name: guest.first_name,
@@ -205,6 +383,8 @@ const store = {
             email: guest.email,
             phone: guest.phone || null,
             recurring_group_id: guest.recurring_group_id || null,
+            notes: guest.notes ?? '',
+            duration_minutes,
           };
           list.push(row);
           created.push(row);

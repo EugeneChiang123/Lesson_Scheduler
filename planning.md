@@ -76,3 +76,28 @@ Instructor login; multi-tenant; custom fields; calendar sync / email reminders /
 
 - **Risk:** Bugs in store-pg (e.g. date format, overlap logic) could break booking/slots. Mitigation: same semantics as file store; test create event → open link → book.
 - **Rollback:** Unset `POSTGRES_URL` on Vercel to fall back to file store (data ephemeral again).
+
+---
+
+## Part 3 — Instructor calendar and booking management
+
+**Goal:** Give the instructor a proper schedule view and tools to adjust individual lessons without breaking the existing booking flow.
+
+- **Instructor calendar:** A dedicated `/setup/bookings` page (`BookingsCalendar`) that shows all lessons with **month/week/day** views, navigation (Today/Previous/Next), and a hover card with student contact info and event type name. Clicking any lesson opens a focused edit screen.
+- **Single booking edit page:** `/setup/bookings/:bookingId` (`EventEditPage`) lets the instructor adjust **date, time, duration**, and **student fields**, add **notes**, and **delete** a booking. It uses `GET /api/bookings/:id`, `PATCH /api/bookings/:id`, and `DELETE /api/bookings/:id`.
+- **Extended booking shape:** Bookings now carry `duration_minutes`, `notes`, and enriched fields (`event_type_name`, `full_name`, `recurring_session`) consistently across the API, calendar, and edit page.
+- **Conflict-safe edits:** A global booking mutex plus `updateIfNoConflict`/`createBatchIfNoConflict` in the store ensure overlap checks and writes are atomic, so edits and new bookings cannot double‑book the same slot.
+
+### Implementation steps (executed)
+
+1. **API enrichment:** Centralized booking-to-API mapping in `server/routes/bookings.js` so list, detail, and edit responses all share the same shape (including recurring session info, notes, and duration).
+2. **File/Postgres store updates:** Normalize bookings in `store-file` (and the Postgres store) to always include `duration_minutes` and `notes`, and add conflict-safe helpers: `updateIfNoConflict`, `createBatchIfNoConflict`.
+3. **Bookings calendar UI:** Build `BookingsCalendar` with month grid, week time-grid, and day list views, including navigation and hover details; wire it to `GET /api/bookings`.
+4. **Event edit UI:** Build `EventEditPage` bound to `/setup/bookings/:bookingId`, loading via `GET /api/bookings/:id`, saving via `PATCH`, and deleting via `DELETE`. Surface conflict errors (409) with friendly copy and auto-refresh the form to the server source of truth.
+5. **Docs alignment:** Update `docs/API.md`, `docs/FILES.md`, and `docs/INTERACTIONS.md` so the new calendar and booking-edit flows, routes, and fields are the documented source of truth.
+
+### Risk and rollout
+
+- **Risk:** Incorrect overlap logic or duration recalculation could allow or falsely block conflicting lessons. Mitigation: centralize overlap checks in the store mutex helpers and test edits around existing bookings (shorter/longer duration, moving across days).
+- **Risk:** UI edit page diverges from API rules (e.g. empty names/emails). Mitigation: keep validation mirrored (form + server 400s) and rely on re-fetch after 409 to reset stale state.
+- **Rollback:** Hide or link away from `/setup/bookings` and `/setup/bookings/:bookingId` in the UI, and fall back to read-only `/setup` plus the original booking creation flow while leaving the underlying data model intact.

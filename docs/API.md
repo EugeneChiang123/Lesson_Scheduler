@@ -10,6 +10,7 @@ Single source of truth for the Lesson Scheduler REST API. All endpoints are unde
 - **Success responses:** JSON; status 200 (OK), 201 (Created) as noted per endpoint.
 - **Error responses:** JSON with `{ "error": "message" }`. Some endpoints add optional fields (e.g. `requestedStart`, `conflictingStart`) for conflict errors.
 - **Dates/times:** Dates as `YYYY-MM-DD`; times in API responses may use `YYYY-MM-DD HH:mm:ss` or ISO-like strings (e.g. `2026-02-20T09:00:00`).
+- **Auth:** Endpoints that require a logged-in professional expect the request header `Authorization: Bearer <token>` where the token is a Clerk session token. Missing or invalid token returns `401`. When using file store (no Postgres), auth endpoints return `503` (Auth requires Postgres).
 
 ---
 
@@ -31,13 +32,81 @@ or
 
 ---
 
+## Professionals
+
+Base path: `/api/professionals`. Public routes (no auth): `GET /reserved-slugs`, `GET /by-slug/:slug`. All other routes require auth (`Authorization: Bearer <token>`).
+
+### GET /api/professionals/reserved-slugs
+
+Returns reserved path segments that cannot be used as profile slugs. No auth.
+
+**Response:** `200 OK`
+
+```json
+{ "slugs": ["book", "booking", "bookings", "setup", "api", "auth", "sign-in", "sign-up", "health", "login", "logout", "signin", "signup", "new", "edit"] }
+```
+
+---
+
+### GET /api/professionals/by-slug/:slug
+
+Resolves a URL slug for redirect or dashboard. No auth. Used when loading `/:professionalSlug` to decide whether to redirect (old slug) or show dashboard (current slug).
+
+**Response:** `200 OK`
+
+- If `slug` is an old slug (in `slug_redirects`): `{ "redirectTo": "/currentSlug" }` — client should navigate to `redirectTo`.
+- If `slug` is a current profile slug: `{ "profileSlug": "slug" }`.
+
+**Errors:** `404` — slug not found, reserved, or empty.
+
+---
+
+### GET /api/professionals/me
+
+Returns the current professional (resolved from Clerk token; created on first request if missing).
+
+**Response:** `200 OK`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | number | Primary key |
+| clerkUserId | string | Clerk user id |
+| email | string | |
+| fullName | string | |
+| profileSlug | string | URL slug for professional dashboard |
+| timeZone | string | IANA or offset (e.g. America/Los_Angeles) |
+| createdAt | string | |
+| updatedAt | string | |
+
+**Errors:** `401` — invalid or missing token. `404` — professional not found (should not occur after create-on-first). `503` — auth requires Postgres (file store in use).
+
+---
+
+### PATCH /api/professionals/me
+
+Update the current professional. Partial update; omit fields to leave unchanged.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| full_name | string | no | Display name |
+| profile_slug | string | no | URL slug (must not be reserved: book, booking, bookings, setup, api, auth, sign-in, sign-up, health, login, logout, etc.) |
+| time_zone | string | no | IANA or offset |
+
+**Response:** `200 OK` — updated professional object (same shape as GET /me).
+
+**Errors:** `400` — reserved slug or invalid input. `401` — not authenticated. `409` — profile slug already in use. `503` — auth requires Postgres.
+
+---
+
 ## Event types
 
 Base path: `/api/event-types`.
 
 ### GET /api/event-types
 
-List all event types (instructor UI).
+List event types for the current professional (instructor UI). Requires auth.
 
 **Response:** `200 OK`
 
@@ -53,6 +122,9 @@ Array of event type objects:
 | allowRecurring | boolean | Whether recurring bookings are allowed |
 | recurringCount | number | Number of sessions per recurring booking (1–52) |
 | availability | array | Weekly windows: `{ day, start, end }`; `day` 0–6 (Sun–Sat), `start`/`end` like `"09:00"`, `"17:00"` |
+| location | string | Optional location (e.g. room, Zoom link) |
+| timeZone | string | IANA time zone for slots and display (e.g. `America/Los_Angeles`) |
+| priceDollars | number | Price in USD (0 = free). Shown on booking page. |
 
 **Errors:** `500` — server error with `{ "error": "message" }`.
 
@@ -103,6 +175,7 @@ Create an event type (instructor).
 | allowRecurring | boolean | no | Default false |
 | recurringCount | number | no | Default 1 (clamped 1–52) |
 | availability | array | no | Default `[]`; items `{ day, start, end }` |
+| location | string | no | Default `""` |
 
 **Response:** `201 Created` — created event type object.
 
@@ -136,7 +209,7 @@ Update an event type (instructor). Partial update; omit fields to leave unchange
 
 ### GET /api/event-types/:slug/slots
 
-Get available start times for a given date. Slots are derived from the event type’s weekly availability, minus already-booked times and past times for today.
+Get available start times for a given date. Slots are generated in the event type time zone (date in that zone, start times in UTC as ISO with Z). Already-booked and past times are excluded.
 
 **Parameters:**
 
@@ -145,7 +218,7 @@ Get available start times for a given date. Slots are derived from the event typ
 
 **Response:** `200 OK`
 
-Array of strings: ISO-like start times for the date (e.g. `"2026-02-20T09:00:00"`). Sorted.
+Array of strings: UTC slot start times in ISO format with `Z` (e.g. `"2026-02-20T17:00:00Z"`). Sorted. Generated using the event type time zone; client should display in that `timeZone`.
 
 **Errors:**
 
@@ -174,6 +247,7 @@ Array of booking objects, sorted by start time:
 | event_type_name | string \| null | Event type name |
 | start_time | string | Start (e.g. `YYYY-MM-DD HH:mm:ss`) |
 | end_time | string | End |
+| duration_minutes | number | Length of the booking in minutes (stored per booking; derived from end−start if null) |
 | first_name | string | |
 | last_name | string | |
 | full_name | string | `"firstName lastName"` trimmed |
@@ -181,14 +255,75 @@ Array of booking objects, sorted by start time:
 | phone | string \| null | |
 | recurring_group_id | string \| null | Set when part of a recurring booking |
 | recurring_session | object \| null | `{ index, total }` when recurring (e.g. session 2 of 4) |
+| notes | string | Optional notes / additional details |
 
 **Errors:** `500` — server error.
 
 ---
 
+### GET /api/bookings/:id
+
+Get one booking by id (event edit page).
+
+**Parameters:** `id` — booking id.
+
+**Response:** `200 OK` — single booking object (same shape as in the list, with `event_type_name`, `full_name`, `recurring_session`, `notes`, `duration_minutes`).
+
+**Errors:**
+
+- `404` — `{ "error": "Booking not found" }`
+- `500` — server error
+
+---
+
+### PATCH /api/bookings/:id
+
+Update one booking (instructor). Partial update; omit fields to leave unchanged.
+
+**Parameters:** `id` — booking id.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| startTime | string | no | New start (ISO or `YYYY-MM-DD HH:mm:ss`). If only start changes, end is preserved using the booking’s duration. |
+| endTime | string | no | Override end time explicitly. |
+| durationMinutes | number | no | New duration in minutes; end is computed as start + durationMinutes. Overlap is checked for the new (start, end). |
+| firstName | string | no | Must be non-empty if provided |
+| lastName | string | no | Must be non-empty if provided |
+| email | string | no | Must be non-empty if provided |
+| phone | string | no | |
+| notes | string | no | Additional details |
+
+**Response:** `200 OK` — updated booking object (enriched like GET /api/bookings/:id).
+
+**Errors:**
+
+- `400` — `{ "error": "firstName required" }` (or lastName/email) when empty string sent
+- `404` — `{ "error": "Booking not found" }`
+- `409` — `{ "error": "This time would overlap with another lesson", "conflictingStart": "..." }` when the new start/end or duration would overlap another booking
+- `500` — server error
+
+---
+
+### DELETE /api/bookings/:id
+
+Delete one booking.
+
+**Parameters:** `id` — booking id.
+
+**Response:** `204 No Content` on success.
+
+**Errors:**
+
+- `404` — `{ "error": "Booking not found" }`
+- `500` — server error
+
+---
+
 ### POST /api/bookings
 
-Create one or more bookings (student). If the event type has recurring enabled and `recurringCount` > 1, creates that many bookings at the same weekday/time for consecutive weeks.
+Create one or more bookings (student). Each created booking gets its duration from the event type’s `durationMinutes`. If the event type has recurring enabled and `recurringCount` > 1, creates that many bookings at the same weekday/time for consecutive weeks.
 
 **Request body:**
 
@@ -213,6 +348,8 @@ Create one or more bookings (student). If the event type has recurring enabled a
 
 For recurring: `count` is the number of bookings created; `recurringGroupId` is a non-null string tying them together.
 
+When Resend is configured (`RESEND_API_KEY`, `EMAIL_FROM`), confirmation emails are sent to the client and the professional. If sending fails, the response still returns `201` and may include `emailSent: false` and `emailError` (string). Optional env: `BASE_URL` for absolute links in emails (e.g. `https://your-app.vercel.app`).
+
 **Errors:**
 
 - `400` — validation or business rule, e.g.:
@@ -222,6 +359,21 @@ For recurring: `count` is the number of bookings created; `recurringGroupId` is 
 - `404` — `{ "error": "Event type not found" }`
 - `409` — `{ "error": "Slot no longer available", "conflictingStart": "..." }` when the slot was taken between load and submit
 - `500` — server error
+
+---
+
+## Environment variables
+
+Used by the server (and client for Clerk key). See `.env.example` for a template.
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `POSTGRES_URL` or `DATABASE_URL` | No | When set, use Postgres; otherwise file store. Auth and clients require Postgres. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes (for auth) | Clerk publishable key; exposed to client. |
+| `CLERK_SECRET_KEY` | Yes (for auth) | Clerk secret key; server only, never expose to client. |
+| `RESEND_API_KEY` | No | When set, send booking confirmation emails (Resend). |
+| `EMAIL_FROM` | No | From address for email (e.g. `Lesson Scheduler <onboarding@resend.dev>`). |
+| `BASE_URL` | No | Base URL for absolute links in emails (e.g. `https://your-app.vercel.app`). |
 
 ---
 
