@@ -124,16 +124,16 @@ export default function EventEditPage() {
                 const { dateStr, timeStr } = parseDateTime(data.start_time, data.end_time);
                 const durationMinutes = data.duration_minutes != null ? data.duration_minutes : 30;
                 setBooking(data);
-                setForm({
+                setForm((prev) => ({
                   dateStr,
                   timeStr,
                   durationMinutes,
-                  firstName: data.first_name || '',
-                  lastName: data.last_name || '',
-                  email: data.email || '',
-                  phone: data.phone || '',
-                  notes: data.notes || '',
-                });
+                  firstName: prev.firstName,
+                  lastName: prev.lastName,
+                  email: prev.email,
+                  phone: prev.phone,
+                  notes: prev.notes,
+                }));
               }
             })
             .catch(() => {});
