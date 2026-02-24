@@ -7,6 +7,26 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const professionalId = req.professionalId;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '0faeff',
+      },
+      body: JSON.stringify({
+        sessionId: '0faeff',
+        runId: 'initial',
+        hypothesisId: 'H6',
+        location: 'server/routes/eventTypes.js:getAll',
+        message: 'GET /api/event-types handler invoked',
+        data: {
+          hasProfessionalId: professionalId != null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     const rows = await store.eventTypes.all(professionalId);
     res.json(rows);
   } catch (err) {

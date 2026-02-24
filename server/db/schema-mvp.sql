@@ -1,14 +1,13 @@
--- MVP schema: professionals, clients, slug_redirects, event_types, bookings.
--- Run via: npm run db:migrate-mvp (drops existing tables and recreates; wipe and start fresh).
+-- Run via: npm run db:migrate-mvp (drops existing tables and recreates—wipe and start fresh).
 
 -- Drop in reverse dependency order
-DROP TABLE IF EXISTS bookings;
-DROP TABLE IF EXISTS event_types;
-DROP TABLE IF EXISTS slug_redirects;
-DROP TABLE IF EXISTS clients;
-DROP TABLE IF EXISTS professionals;
+DROP TABLE IF EXISTS bookings CASCADE;
+DROP TABLE IF EXISTS event_types CASCADE;
+DROP TABLE IF EXISTS slug_redirects CASCADE;
+DROP TABLE IF EXISTS clients CASCADE;
+DROP TABLE IF EXISTS professionals CASCADE;
 
--- Professionals (Clerk auth; no password in our DB)
+-- Professionals (Clerk auth - no password in our DB)
 CREATE TABLE professionals (
   id SERIAL PRIMARY KEY,
   clerk_user_id VARCHAR(255) UNIQUE NOT NULL,
@@ -23,7 +22,7 @@ CREATE TABLE professionals (
 CREATE INDEX idx_professionals_clerk_user_id ON professionals(clerk_user_id);
 CREATE INDEX idx_professionals_profile_slug ON professionals(profile_slug);
 
--- Clients (guests who book; unique by email + first_name + last_name)
+-- Clients (guests who book - unique by email + first_name + last_name)
 CREATE TABLE clients (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) NOT NULL,
@@ -45,7 +44,7 @@ CREATE TABLE slug_redirects (
 
 CREATE INDEX idx_slug_redirects_old_slug ON slug_redirects(old_slug);
 
--- Event types (owned by professional; slug globally unique for /book/:eventTypeSlug)
+-- Event types (owned by professional - slug globally unique for /book/:eventTypeSlug)
 CREATE TABLE event_types (
   id SERIAL PRIMARY KEY,
   professional_id INTEGER NOT NULL REFERENCES professionals(id) ON DELETE CASCADE,

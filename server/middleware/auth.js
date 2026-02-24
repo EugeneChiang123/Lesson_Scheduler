@@ -26,6 +26,26 @@ async function requireProfessional(req, res, next) {
 
   const secretKey = process.env.CLERK_SECRET_KEY;
   if (!secretKey) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '0faeff',
+      },
+      body: JSON.stringify({
+        sessionId: '0faeff',
+        runId: 'initial',
+        hypothesisId: 'H1',
+        location: 'server/middleware/auth.js:secretKeyMissing',
+        message: 'CLERK_SECRET_KEY missing when requiring professional',
+        data: {
+          hasToken: Boolean(token),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     return res.status(500).json({ error: 'Server auth not configured' });
   }
 
@@ -34,6 +54,28 @@ async function requireProfessional(req, res, next) {
     const result = await verifyToken(token, { secretKey });
     payload = result;
   } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '0faeff',
+      },
+      body: JSON.stringify({
+        sessionId: '0faeff',
+        runId: 'initial',
+        hypothesisId: 'H2',
+        location: 'server/middleware/auth.js:verifyTokenError',
+        message: 'verifyToken failed in requireProfessional',
+        data: {
+          hasToken: Boolean(token),
+          errorName: err && err.name ? String(err.name).substring(0, 100) : null,
+          errorMessage: err && err.message ? String(err.message).substring(0, 200) : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
@@ -43,6 +85,24 @@ async function requireProfessional(req, res, next) {
   }
 
   if (!store.professionals) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '0faeff',
+      },
+      body: JSON.stringify({
+        sessionId: '0faeff',
+        runId: 'initial',
+        hypothesisId: 'H3',
+        location: 'server/middleware/auth.js:noProfessionalsStore',
+        message: 'store.professionals missing when requiring professional',
+        data: {},
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     return res.status(503).json({ error: 'Auth requires Postgres' });
   }
 
@@ -68,6 +128,26 @@ async function requireProfessional(req, res, next) {
 
   req.professional = professional;
   req.professionalId = professional.id;
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '0faeff',
+    },
+    body: JSON.stringify({
+      sessionId: '0faeff',
+      runId: 'initial',
+      hypothesisId: 'H4',
+      location: 'server/middleware/auth.js:requireProfessionalSuccess',
+      message: 'requireProfessional succeeded',
+      data: {
+        professionalId: professional && professional.id,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
   next();
 }
 
@@ -76,8 +156,31 @@ async function requireProfessional(req, res, next) {
  * When mounted at /api/event-types, req.path is e.g. "/", "/id/1", "/30min-intro", "/30min-intro/slots".
  */
 function requireProfessionalUnlessPublicEventTypes(req, res, next) {
-  if (req.method !== 'GET') return requireProfessional(req, res, next);
   const parts = req.path.split('/').filter(Boolean);
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/b637c938-aa6e-494b-9311-7c4ae502ce18', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '0faeff',
+    },
+    body: JSON.stringify({
+      sessionId: '0faeff',
+      runId: 'initial',
+      hypothesisId: 'H5',
+      location: 'server/middleware/auth.js:requireProfessionalUnlessPublicEventTypes',
+      message: 'requireProfessionalUnlessPublicEventTypes evaluated',
+      data: {
+        method: req.method,
+        path: req.path,
+        partsLength: parts.length,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
+
+  if (req.method !== 'GET') return requireProfessional(req, res, next);
   if (parts.length === 1) return next();
   if (parts.length === 2 && parts[1] === 'slots') return next();
   return requireProfessional(req, res, next);
