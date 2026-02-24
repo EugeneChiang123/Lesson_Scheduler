@@ -7,12 +7,14 @@ import './index.css';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const hasKey = publishableKey && String(publishableKey).trim().length > 0;
-if (!hasKey && import.meta.env.MODE !== 'test') {
+const isTestEnv = import.meta.env.MODE === 'test';
+
+if (!hasKey && !isTestEnv) {
   console.warn('Missing VITE_CLERK_PUBLISHABLE_KEY; auth will not work.');
 }
 
 function Root() {
-  if (!hasKey && import.meta.env.MODE !== 'test') {
+  if (!hasKey && !isTestEnv) {
     return (
       <div style={{
         padding: 24,
@@ -28,8 +30,11 @@ function Root() {
       </div>
     );
   }
+
+  const clerkPublishableKey = hasKey ? publishableKey : '';
+
   return (
-    <ClerkProvider publishableKey={publishableKey} afterSignOutUrl="/sign-in">
+    <ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/sign-in">
       <BrowserRouter>
         <App />
       </BrowserRouter>
