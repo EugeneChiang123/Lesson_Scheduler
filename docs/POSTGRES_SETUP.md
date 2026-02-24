@@ -4,6 +4,8 @@ Use Postgres so event types and bookings persist across serverless requests (fix
 
 **Recommended:** Add Postgres via the **Vercel Marketplace** (e.g. Neon). Vercel injects the connection URL into your project; you run the migration once, then redeploy.
 
+> **MVP schema:** This codebase uses the MVP schema (professionals, clients, etc.). Run `npm run db:migrate-mvp` instead of `npm run db:migrate-pg`. For a full walkthrough of Clerk, Postgres, and Resend, see [SETUP_THIRD_PARTY_SERVICES.md](SETUP_THIRD_PARTY_SERVICES.md).
+
 > **Note:** The old “Vercel Postgres” product was retired and moved to [Neon](https://vercel.com/marketplace/neon). For new projects, use a [Postgres integration from the Marketplace](https://vercel.com/marketplace?category=storage&search=postgres). Neon is the default option and works well with this app.
 
 ---
