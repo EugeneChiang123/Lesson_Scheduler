@@ -12,7 +12,7 @@ if (!hasKey && import.meta.env.MODE !== 'test') {
 }
 
 function Root() {
-  if (!hasKey) {
+  if (!hasKey && import.meta.env.MODE !== 'test') {
     return (
       <div style={{
         padding: 24,
