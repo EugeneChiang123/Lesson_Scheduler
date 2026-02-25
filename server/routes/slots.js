@@ -21,8 +21,9 @@ function getSlotsForDate(eventType, dateStr) {
   const zone = DateTime.now().setZone(tz).zone;
   const dayStart = DateTime.fromISO(dateStr + 'T00:00:00', { zone });
   if (!dayStart.isValid) return [];
-  const day = dayStart.weekday % 7;
-  const windows = availability.filter((a) => a.day === day);
+  // Luxon weekday: 1=Mon..7=Sun → we use 0=Sun,1=Mon..6=Sat to match client (SetupEventForm DAYS).
+  const dayNum = dayStart.weekday % 7;
+  const windows = availability.filter((a) => Number(a.day) === dayNum);
   if (windows.length === 0) return [];
 
   const slotSet = new Set();
