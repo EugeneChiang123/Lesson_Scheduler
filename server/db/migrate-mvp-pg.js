@@ -21,13 +21,17 @@ async function run() {
   const statements = fullSql
     .split(';')
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith('--'));
+    .filter((s) => s.length > 0);
 
   const client = new Client({ connectionString: url });
   await client.connect();
 
   try {
+    let index = 0;
     for (const statement of statements) {
+      index += 1;
+      // Log which statement is running to debug migration issues.
+      console.log(`[migrate-mvp] Running statement ${index}: ${statement.substring(0, 80)}...`);
       await client.query(statement + ';');
     }
     console.log('MVP Postgres migration complete: professionals, clients, slug_redirects, event_types, bookings.');

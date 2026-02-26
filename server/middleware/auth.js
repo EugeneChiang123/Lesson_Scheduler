@@ -76,8 +76,8 @@ async function requireProfessional(req, res, next) {
  * When mounted at /api/event-types, req.path is e.g. "/", "/id/1", "/30min-intro", "/30min-intro/slots".
  */
 function requireProfessionalUnlessPublicEventTypes(req, res, next) {
-  if (req.method !== 'GET') return requireProfessional(req, res, next);
   const parts = req.path.split('/').filter(Boolean);
+  if (req.method !== 'GET') return requireProfessional(req, res, next);
   if (parts.length === 1) return next();
   if (parts.length === 2 && parts[1] === 'slots') return next();
   return requireProfessional(req, res, next);

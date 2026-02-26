@@ -6,7 +6,10 @@ const router = express.Router();
 
 /** Slot start time in UTC as ISO string with Z so client and server parse as UTC. */
 function toIsoUtc(dt) {
-  return dt.toUTC().toISOString().slice(0, 19) + 'Z';
+  if (!dt || !dt.isValid) return null;
+  const iso = dt.toUTC().toISO({ suppressMilliseconds: true });
+  if (iso == null) return null;
+  return iso.slice(0, 19) + 'Z';
 }
 
 /**
@@ -14,16 +17,26 @@ function toIsoUtc(dt) {
  * Returns array of UTC ISO-like strings ("YYYY-MM-DD HH:mm:ss") for the client.
  */
 function getSlotsForDate(eventType, dateStr) {
-  const duration = eventType.durationMinutes ?? 30;
+  const duration = eventType.durationMinutes ?? eventType.duration_minutes ?? 30;
   if (!Number.isFinite(duration) || duration <= 0) return [];
   const tz = eventType.timeZone || eventType.time_zone || 'America/Los_Angeles';
-  const availability = eventType.availability || [];
+  const availability = Array.isArray(eventType.availability) ? eventType.availability : [];
   const zone = DateTime.now().setZone(tz).zone;
   const dayStart = DateTime.fromISO(dateStr + 'T00:00:00', { zone });
   if (!dayStart.isValid) return [];
-  const day = dayStart.weekday % 7;
-  const windows = availability.filter((a) => a.day === day);
-  if (windows.length === 0) return [];
+  // Luxon weekday: 1=Mon..7=Sun → we use 0=Sun,1=Mon..6=Sat to match client (SetupEventForm DAYS).
+  const dayNum = dayStart.weekday % 7;
+  const windows = availability.filter((a) => {
+    const d = Number(a.day);
+    const storedDay = (d === 7 ? 0 : d);
+    return storedDay === dayNum;
+  });
+  if (windows.length === 0) {
+    if (availability.length > 0) {
+      console.warn('[slots] No windows for date: date=%s tz=%s weekday=%s dayNum=%s availability.days=%s', dateStr, tz, dayStart.weekday, dayNum, availability.map((a) => a.day).join(','));
+    }
+    return [];
+  }
 
   const slotSet = new Set();
   for (const w of windows) {
@@ -35,7 +48,8 @@ function getSlotsForDate(eventType, dateStr) {
       const h = Math.floor(minutes / 60);
       const m = minutes % 60;
       const localStart = dayStart.set({ hour: h, minute: m, second: 0, millisecond: 0 });
-      if (localStart.isValid) slotSet.add(toIsoUtc(localStart));
+      const iso = toIsoUtc(localStart);
+      if (iso) slotSet.add(iso);
       minutes += duration;
     }
   }
@@ -46,42 +60,72 @@ function getSlotsForDate(eventType, dateStr) {
 
 // GET /api/event-types/:slug/slots?date=YYYY-MM-DD
 router.get('/:slug/slots', async (req, res) => {
+  const { slug } = req.params;
+  const { date } = req.query;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Valid date (YYYY-MM-DD) required' });
+
+  let eventType;
   try {
-    const { slug } = req.params;
-    const { date } = req.query;
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Valid date (YYYY-MM-DD) required' });
+    eventType = await store.eventTypes.getBySlug(slug);
+  } catch (e) {
+    console.error('[slots] getBySlug error:', e);
+    return res.status(500).json({ error: 'Failed to load event type', details: e.message });
+  }
+  if (!eventType) return res.status(404).json({ error: 'Event type not found' });
 
-    const eventType = await store.eventTypes.getBySlug(slug);
-    if (!eventType) return res.status(404).json({ error: 'Event type not found' });
-
+  try {
     const tz = eventType.timeZone || eventType.time_zone || 'America/Los_Angeles';
     const zone = DateTime.now().setZone(tz).zone;
     const dayStart = DateTime.fromISO(date + 'T00:00:00', { zone });
+    if (!dayStart.isValid) {
+      return res.status(400).json({ error: 'Invalid date or time zone', details: dayStart.invalidReason || 'unknown' });
+    }
     const dayEnd = dayStart.plus({ days: 1 });
-    const utcStartIso = dayStart.toUTC().toISOString().slice(0, 19).replace('T', ' ');
-    const utcEndIso = dayEnd.toUTC().toISOString().slice(0, 19).replace('T', ' ');
+    const utcStart = dayStart.toUTC();
+    const utcEnd = dayEnd.toUTC();
+    const utcStartIso = (utcStart.toISO({ suppressMilliseconds: true }) || '').slice(0, 19).replace('T', ' ');
+    const utcEndIso = (utcEnd.toISO({ suppressMilliseconds: true }) || '').slice(0, 19).replace('T', ' ');
 
-    const possibleSlots = getSlotsForDate(eventType, date);
-    const bookedInRange = await store.bookings.getBookingsForEventTypeInRange(eventType.id, utcStartIso, utcEndIso);
-    const duration = eventType.durationMinutes ?? 30;
+    let possibleSlots;
+    try {
+      possibleSlots = getSlotsForDate(eventType, date);
+    } catch (e) {
+      console.error('[slots] getSlotsForDate error:', e);
+      possibleSlots = [];
+    }
+    possibleSlots = Array.isArray(possibleSlots) ? possibleSlots : [];
+
+    // Do not catch getBookingsForEventTypeInRange: on DB failure we must return 500,
+    // not treat as "no bookings" and show all slots (which would allow double bookings).
+    let bookedInRange = await store.bookings.getBookingsForEventTypeInRange(eventType.id, utcStartIso, utcEndIso);
+    bookedInRange = Array.isArray(bookedInRange) ? bookedInRange : [];
+
+    const duration = eventType.durationMinutes ?? eventType.duration_minutes ?? 30;
     const now = DateTime.utc();
 
     const available = possibleSlots.filter((slotStart) => {
-      const slotDt = DateTime.fromISO(slotStart, { zone: 'utc' });
-      if (slotDt <= now) return false;
-      const slotEnd = slotDt.plus({ minutes: duration });
-      const overlaps = bookedInRange.some((b) => {
-        const bStart = (b.start_time || '').replace(' ', 'T');
-        const bEnd = (b.end_time || '').replace(' ', 'T');
-        const bS = DateTime.fromISO(bStart.includes('Z') ? bStart : bStart + 'Z', { zone: 'utc' });
-        const bE = DateTime.fromISO(bEnd.includes('Z') ? bEnd : bEnd + 'Z', { zone: 'utc' });
-        return slotDt < bE && slotEnd > bS;
-      });
-      return !overlaps;
+      try {
+        const slotDt = DateTime.fromISO(slotStart, { zone: 'utc' });
+        if (!slotDt.isValid || slotDt <= now) return false;
+        const slotEnd = slotDt.plus({ minutes: duration });
+        const overlaps = bookedInRange.some((b) => {
+          const bStart = (b.start_time || '').trim().replace(' ', 'T').substring(0, 19);
+          const bEnd = (b.end_time || '').trim().replace(' ', 'T').substring(0, 19);
+          if (!bStart || !bEnd || bStart.length < 19 || bEnd.length < 19) return false;
+          const bS = DateTime.fromISO(bStart.includes('Z') ? bStart : bStart + 'Z', { zone: 'utc' });
+          const bE = DateTime.fromISO(bEnd.includes('Z') ? bEnd : bEnd + 'Z', { zone: 'utc' });
+          if (!bS.isValid || !bE.isValid) return false;
+          return slotDt < bE && slotEnd > bS;
+        });
+        return !overlaps;
+      } catch (_) {
+        return false;
+      }
     });
     res.json(available);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[slots] Error:', err);
+    res.status(500).json({ error: err.message, stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined });
   }
 });
 
