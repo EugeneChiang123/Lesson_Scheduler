@@ -9,6 +9,13 @@ const { Pool } = require('pg');
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 const pool = new Pool({ connectionString });
 
+// Prevent unhandled 'error' from killing the process when an idle connection
+// is closed by the server (e.g. Neon idle timeout). The pool will create new
+// connections for subsequent requests.
+pool.on('error', (err) => {
+  console.error('[store-pg] Pool error (idle connection lost):', err.message);
+});
+
 const MAX_RECURRING_COUNT = 52;
 
 /** Advisory lock key for serializing all booking writes (POST and PATCH) to prevent double-booking. */
