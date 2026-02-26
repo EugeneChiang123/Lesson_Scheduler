@@ -95,13 +95,9 @@ router.get('/:slug/slots', async (req, res) => {
     }
     possibleSlots = Array.isArray(possibleSlots) ? possibleSlots : [];
 
-    let bookedInRange;
-    try {
-      bookedInRange = await store.bookings.getBookingsForEventTypeInRange(eventType.id, utcStartIso, utcEndIso);
-    } catch (e) {
-      console.error('[slots] getBookingsForEventTypeInRange error:', e);
-      bookedInRange = [];
-    }
+    // Do not catch getBookingsForEventTypeInRange: on DB failure we must return 500,
+    // not treat as "no bookings" and show all slots (which would allow double bookings).
+    let bookedInRange = await store.bookings.getBookingsForEventTypeInRange(eventType.id, utcStartIso, utcEndIso);
     bookedInRange = Array.isArray(bookedInRange) ? bookedInRange : [];
 
     const duration = eventType.durationMinutes ?? eventType.duration_minutes ?? 30;
