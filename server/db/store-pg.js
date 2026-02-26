@@ -28,9 +28,20 @@ function formatTs(val) {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 }
 
+/** Normalize availability day to 0=Sun..6=Sat (client convention). Accepts 0-6 or ISO 7 for Sunday. */
+function normalizeAvailability(availability) {
+  if (!Array.isArray(availability)) return [];
+  return availability.filter((w) => w != null && typeof w === 'object').map((w) => {
+    const d = Number(w.day);
+    const day = d === 7 ? 0 : (Number.isNaN(d) ? w.day : d);
+    return { ...w, day, start: w.start || '09:00', end: w.end || '17:00' };
+  });
+}
+
 /** Map DB row to app event type (camelCase) */
 function toEventType(row) {
   if (!row) return null;
+  const raw = Array.isArray(row.availability) ? row.availability : (row.availability || []);
   return {
     id: row.id,
     professionalId: row.professional_id,
@@ -40,7 +51,7 @@ function toEventType(row) {
     durationMinutes: row.duration_minutes,
     allowRecurring: Boolean(row.allow_recurring),
     recurringCount: row.recurring_count,
-    availability: Array.isArray(row.availability) ? row.availability : (row.availability || []),
+    availability: normalizeAvailability(raw),
     location: row.location || '',
     timeZone: row.time_zone || 'America/Los_Angeles',
     priceDollars: row.price_dollars != null ? Number(row.price_dollars) : 0,
