@@ -101,3 +101,42 @@ Instructor login; multi-tenant; custom fields; calendar sync / email reminders /
 - **Risk:** Incorrect overlap logic or duration recalculation could allow or falsely block conflicting lessons. Mitigation: centralize overlap checks in the store mutex helpers and test edits around existing bookings (shorter/longer duration, moving across days).
 - **Risk:** UI edit page diverges from API rules (e.g. empty names/emails). Mitigation: keep validation mirrored (form + server 400s) and rely on re-fetch after 409 to reset stale state.
 - **Rollback:** Hide or link away from `/setup/bookings` and `/setup/bookings/:bookingId` in the UI, and fall back to read-only `/setup` plus the original booking creation flow while leaving the underlying data model intact.
+
+---
+
+## Part 4 — UI polish (design tokens, typography, interactive states)
+
+**Goal:** Polish the Lesson Scheduler UI by strengthening design tokens, fixing inconsistencies, and improving typography and interactive states—without changing the current inline-styles + theme approach. Improves perceived quality and accessibility for both the public booking flow and the instructor dashboard.
+
+**Scope (Steps 1–3 in this work log; Steps 4–5 to follow after review):**
+
+- **Step 1 — Theme and consistency:** One source of truth for spacing, colors, and global CSS. Expand `client/src/styles/theme.js` with a spacing scale, type scale, and semantic color tokens (e.g. `navActiveBg`, `secondaryBg`, `primaryHover`). Replace hardcoded colors in InstructorLayout, SetupHome, and Book. Align `client/src/index.css` body background and text color with the theme.
+- **Step 2 — Typography:** Add Inter via Google Fonts; apply type scale from theme (page titles, section titles, body, captions) across SetupHome, InstructorLayout, Book, and SetupEventForm.
+- **Step 3 — Interactive states and transitions:** Add hover and focus styles using theme colors; add a visible focus ring (global or theme-based) for keyboard users; add short transitions on buttons and nav items in InstructorLayout, SetupHome, Book, and SetupEventForm.
+
+**Planned later (after review):** Step 4 — Public booking page polish (calendar, slots, form, summary card). Step 5 — Instructor dashboard polish (sidebar, SetupHome cards, forms, auth wrappers).
+
+### Implementation steps (executed for Steps 1–3)
+
+1. **Expand theme.js** — Add `spacing`, `fontSize`, `navActiveBg`, `secondaryBg`, `primaryHover`, `secondaryHover`, `transition`, and focus-ring tokens. Keep existing `primary`, `background`, `cardBg`, `border`, `muted`, `text`, `borderRadius`, `shadow` as-is.
+2. **Replace hardcoded colors** — InstructorLayout: `navItemActive` uses `theme.navActiveBg`. SetupHome: `previewBtn`, `copyBtn` use `theme.secondaryBg`. Book: ensure any neutral surfaces use theme tokens.
+3. **Align global CSS** — In `index.css`, set body `background` and `color` to match theme (`#f9fafb`, `#111827`). Add Inter font link in `index.html` and set `font-family: 'Inter', system-ui, ...` on body.
+4. **Apply type scale** — Use `theme.fontSize` (title, xl, base, sm) for headings and body text in InstructorLayout, SetupHome, Book, SetupEventForm.
+5. **Focus and transitions** — Add global `:focus-visible` rule in `index.css` using primary color. Add `theme.transition` to interactive elements (Create button, nav links, search, card buttons, Book calendar/slots/form buttons, SetupEventForm inputs/buttons).
+
+### Files added or changed
+
+| Action   | File |
+| -------- | ---- |
+| Theme    | `client/src/styles/theme.js` — spacing, fontSize, navActiveBg, secondaryBg, primaryHover, secondaryHover, transition, focusRing/Offset. |
+| Global   | `client/index.html` — Inter font link. `client/src/index.css` — body background/color/font; :focus-visible; optional subtle hover. |
+| Layout   | `client/src/components/InstructorLayout.jsx` — theme tokens, spacing, fontSize, transition. |
+| Pages    | `client/src/pages/SetupHome.jsx` — secondaryBg, spacing, fontSize, transition. |
+| Pages    | `client/src/pages/Book.jsx` — theme tokens, fontSize, spacing, transition where applicable. |
+| Pages    | `client/src/pages/SetupEventForm.jsx` — theme fontSize, spacing, transition on inputs/buttons. |
+| Docs     | `planning.md` — Part 4 work log (this section). |
+
+### Risk and rollout
+
+- **Risk:** Theme or CSS changes could affect layout or contrast. Mitigation: keep existing hex values where possible; test booking flow and instructor dashboard after changes.
+- **Rollback:** Revert theme.js and component style objects to previous values; remove Inter link and revert index.css if needed.
