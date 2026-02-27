@@ -267,8 +267,9 @@ router.post('/', async (req, res) => {
           name: eventType.name,
           durationMinutes: eventType.durationMinutes ?? eventType.duration_minutes,
           location: eventType.location || '',
+          notificationTemplate: eventType.notificationTemplate ?? eventType.notification_template ?? null,
         },
-        professional: professional ? { fullName: professional.fullName ?? professional.full_name, email: professional.email } : null,
+        professional: professional ? { fullName: professional.fullName ?? professional.full_name, email: professional.email, phone: professional.phone } : null,
         baseUrl,
       });
     }

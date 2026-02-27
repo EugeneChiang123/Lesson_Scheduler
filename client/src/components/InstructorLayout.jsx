@@ -9,6 +9,7 @@ export default function InstructorLayout() {
 
   const isScheduling = path === basePath || path.startsWith(`${basePath}/new`) || path.includes('/edit');
   const isBookings = path === `${basePath}/bookings` || path.startsWith(`${basePath}/bookings/`);
+  const isNotificationTemplate = path.startsWith(`${basePath}/notification-template`);
 
   return (
     <div style={styles.container}>
@@ -36,6 +37,16 @@ export default function InstructorLayout() {
             <span style={styles.navIcon}>📅</span>
             Bookings
           </Link>
+          <Link
+            to={`${basePath}/notification-template`}
+            style={{
+              ...styles.navItem,
+              ...(isNotificationTemplate ? styles.navItemActive : {}),
+            }}
+          >
+            <span style={styles.navIcon}>✉️</span>
+            Notification template
+          </Link>
         </nav>
       </aside>
       <main style={styles.main}>
@@ -56,56 +67,61 @@ const styles = {
     flexShrink: 0,
     background: theme.cardBg,
     borderRight: `1px solid ${theme.border}`,
-    padding: '20px 16px',
+    padding: `${theme.spacing[20]}px ${theme.spacing[16]}px`,
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: theme.spacing[16],
   },
   brand: {
-    fontSize: 18,
+    fontSize: theme.fontSize.xl,
     fontWeight: 700,
     color: theme.text,
     textDecoration: 'none',
-    padding: '4px 0',
+    padding: `${theme.spacing[4]}px 0`,
+    transition: theme.transition,
   },
   createBtn: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '10px 16px',
+    padding: `${theme.spacing[10]}px ${theme.spacing[16]}px`,
     background: theme.primary,
     color: '#fff',
     textDecoration: 'none',
     borderRadius: theme.borderRadius,
     fontWeight: 600,
-    fontSize: 14,
+    fontSize: theme.fontSize.base,
+    transition: theme.transition,
   },
   nav: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: theme.spacing[4],
   },
   navItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
-    padding: '10px 12px',
+    gap: theme.spacing[10],
+    padding: `${theme.spacing[10]}px ${theme.spacing[12]}px`,
     borderRadius: theme.borderRadius,
     color: theme.text,
     textDecoration: 'none',
-    fontSize: 14,
+    fontSize: theme.fontSize.base,
     fontWeight: 500,
+    transition: theme.transition,
   },
   navItemActive: {
-    background: '#eff6ff',
+    background: theme.navActiveBg,
     color: theme.primary,
+    borderLeft: `3px solid ${theme.primary}`,
+    marginLeft: -3,
   },
   navIcon: {
-    fontSize: 16,
+    fontSize: theme.fontSize.lg,
   },
   main: {
     flex: 1,
     overflow: 'auto',
-    padding: 24,
+    padding: theme.spacing[24],
   },
 };

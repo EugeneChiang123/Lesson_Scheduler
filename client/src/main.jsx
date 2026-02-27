@@ -3,7 +3,15 @@ import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { theme } from './styles/theme';
 import './index.css';
+
+// Single source of truth: expose theme tokens as CSS variables so global CSS and components can use them.
+const root = document.documentElement;
+root.style.setProperty('--focus-ring', theme.focusRing);
+root.style.setProperty('--focus-ring-offset', `${theme.focusRingOffset}px`);
+root.style.setProperty('--primary-hover', theme.primaryHover);
+root.style.setProperty('--secondary-hover', theme.secondaryHover);
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const hasKey = publishableKey && String(publishableKey).trim().length > 0;
