@@ -292,7 +292,7 @@ const styles = {
     color: theme.text,
     textDecoration: 'none',
     fontSize: theme.fontSize.base,
-    borderRadius: theme.spacing[4],
+    borderRadius: theme.borderRadius,
     transition: theme.transition,
   },
 };
