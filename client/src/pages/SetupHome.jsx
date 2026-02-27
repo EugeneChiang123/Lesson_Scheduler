@@ -92,7 +92,7 @@ export default function SetupHome() {
       ) : (
         <div style={styles.cardList}>
           {filtered.map((et) => (
-            <div key={et.id} style={styles.eventCard}>
+            <div key={et.id} style={styles.eventCard} data-card-hover>
               <div style={styles.cardMain}>
                 <strong style={styles.cardName}>{et.name}</strong>
                 <div style={styles.cardMeta}>
@@ -225,6 +225,7 @@ const styles = {
     borderRadius: theme.borderRadiusLg,
     border: `1px solid ${theme.border}`,
     boxShadow: theme.shadow,
+    transition: theme.transition,
   },
   cardMain: { flex: 1, minWidth: 0 },
   cardName: { display: 'block', fontSize: theme.fontSize.lg, marginBottom: theme.spacing[8] },
