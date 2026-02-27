@@ -106,6 +106,7 @@ function toEventType(row) {
     location: row.location || '',
     timeZone: row.timeZone || row.time_zone || 'America/Los_Angeles',
     priceDollars: row.priceDollars != null ? Number(row.priceDollars) : (row.price_dollars != null ? Number(row.price_dollars) : 0),
+    notificationTemplate: row.notificationTemplate ?? row.notification_template ?? null,
   };
 }
 
@@ -186,6 +187,7 @@ const store = {
         location: data.location != null ? String(data.location) : '',
         timeZone: data.time_zone || data.timeZone || 'America/Los_Angeles',
         priceDollars: data.price_dollars != null ? Number(data.price_dollars) : (data.priceDollars != null ? Number(data.priceDollars) : 0),
+        notificationTemplate: data.notificationTemplate != null ? String(data.notificationTemplate) : null,
       };
       list.push(row);
       writeEventTypes(list);
@@ -211,6 +213,7 @@ const store = {
         location: data.location !== undefined ? (data.location != null ? String(data.location) : '') : (row.location || ''),
         timeZone: data.time_zone !== undefined || data.timeZone !== undefined ? (data.time_zone || data.timeZone || row.timeZone || 'America/Los_Angeles') : (row.timeZone || 'America/Los_Angeles'),
         priceDollars: data.price_dollars !== undefined || data.priceDollars !== undefined ? Number(data.price_dollars ?? data.priceDollars ?? row.priceDollars ?? 0) : (row.priceDollars != null ? Number(row.priceDollars) : 0),
+        notificationTemplate: data.notificationTemplate !== undefined ? (data.notificationTemplate != null ? String(data.notificationTemplate) : null) : (row.notificationTemplate ?? row.notification_template ?? null),
       };
       list[idx] = updated;
       writeEventTypes(list);

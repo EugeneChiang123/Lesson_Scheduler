@@ -113,21 +113,23 @@ When configured, the app sends booking confirmation emails to the client and the
 2. In the dashboard, open **API Keys** (or **Developers → API Keys**).
 3. Click **Create API Key**, name it (e.g. “Lesson Scheduler”), and copy the key (starts with `re_`). You won’t see it again, so store it somewhere safe.
 
-### 3.2 Verify a domain (for production) or use Resend’s test domain
+### 3.2 Use resend.dev for testing; verify a domain for production
 
-- **Testing:** Resend lets you send from `onboarding@resend.dev` without verifying a domain. You can use that for development and preview.
-- **Production:** In Resend, add and verify your own domain so emails come from e.g. `bookings@yourdomain.com`.
+- **Testing (recommended to start):** Use Resend’s test domain so you don’t need to verify anything. Set `EMAIL_FROM` to `Lesson Scheduler <onboarding@resend.dev>` (or leave it unset—that’s the app default). **Note:** With the test domain, Resend only allows sending **to the email address that owns your Resend account**. To test, use that same address as the client email when making a booking. For sending to any recipient, you need a verified domain (below).
+- **Production (when ready):** In Resend, go to [resend.com/domains](https://resend.com/domains), add and verify your domain, then set `EMAIL_FROM` to an address on that domain (e.g. `Lesson Scheduler <bookings@yourdomain.com>`).
 
 ### 3.3 Configure in your environment
 
-**Local (`.env`):**
+**Local (`.env`) — for testing with resend.dev:**
 
 ```env
 RESEND_API_KEY=re_xxxxxxxxxxxx
 EMAIL_FROM=Lesson Scheduler <onboarding@resend.dev>
 ```
 
-For production with your own domain, use your verified address:
+(You can omit `EMAIL_FROM`; the app defaults to `onboarding@resend.dev`.)
+
+**For production:** After verifying your domain in Resend, set:
 
 ```env
 EMAIL_FROM=Lesson Scheduler <bookings@yourdomain.com>
@@ -137,7 +139,7 @@ EMAIL_FROM=Lesson Scheduler <bookings@yourdomain.com>
 
 **Optional:** Set `BASE_URL` to your app’s public URL (e.g. `https://lesson-scheduler-two.vercel.app`) so links in emails point to the right place.
 
-If you don’t set `RESEND_API_KEY`, the app still works; it just won’t send confirmation emails.
+If you don’t set `RESEND_API_KEY`, the app still works. **Dev testing:** Set `EMAIL_DEV_OVERRIDE` to your Resend account email to receive all booking emails at that address (subjects prefixed with `[Dev]`). Leave unset in production. It just won’t send confirmation emails.
 
 ---
 

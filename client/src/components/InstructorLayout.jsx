@@ -9,6 +9,7 @@ export default function InstructorLayout() {
 
   const isScheduling = path === basePath || path.startsWith(`${basePath}/new`) || path.includes('/edit');
   const isBookings = path === `${basePath}/bookings` || path.startsWith(`${basePath}/bookings/`);
+  const isNotificationTemplate = path.startsWith(`${basePath}/notification-template`);
 
   return (
     <div style={styles.container}>
@@ -35,6 +36,16 @@ export default function InstructorLayout() {
           >
             <span style={styles.navIcon}>📅</span>
             Bookings
+          </Link>
+          <Link
+            to={`${basePath}/notification-template`}
+            style={{
+              ...styles.navItem,
+              ...(isNotificationTemplate ? styles.navItemActive : {}),
+            }}
+          >
+            <span style={styles.navIcon}>✉️</span>
+            Notification template
           </Link>
         </nav>
       </aside>
@@ -102,6 +113,8 @@ const styles = {
   navItemActive: {
     background: theme.navActiveBg,
     color: theme.primary,
+    borderLeft: `3px solid ${theme.primary}`,
+    marginLeft: -3,
   },
   navIcon: {
     fontSize: theme.fontSize.lg,

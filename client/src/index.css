@@ -18,3 +18,12 @@ button:hover:not(:disabled),
 a[href]:hover {
   opacity: 0.92;
 }
+
+[data-card-hover]:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.notification-template-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+}

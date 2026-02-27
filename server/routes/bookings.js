@@ -258,8 +258,14 @@ router.post('/', async (req, res) => {
 
     let emailResult = { sent: false };
     const professionalId = eventType.professionalId ?? eventType.professional_id;
+    console.log('[bookings] Booking created, professionalId:', professionalId ?? 'none');
     if (professionalId) {
       const professional = await store.professionals.getById(professionalId);
+      if (!professional) {
+        console.log('[bookings] Professional not found for id', professionalId, '- skipping email');
+      } else {
+        console.log('[bookings] Sending confirmation email to client and', professional.email);
+      }
       const baseUrl = req.protocol && req.get('host') ? `${req.protocol}://${req.get('host')}` : process.env.BASE_URL || '';
       emailResult = await sendBookingConfirmation({
         created: result.created,
@@ -267,10 +273,16 @@ router.post('/', async (req, res) => {
           name: eventType.name,
           durationMinutes: eventType.durationMinutes ?? eventType.duration_minutes,
           location: eventType.location || '',
+          notificationTemplate: eventType.notificationTemplate ?? eventType.notification_template ?? null,
         },
-        professional: professional ? { fullName: professional.fullName ?? professional.full_name, email: professional.email } : null,
+        professional: professional ? { fullName: professional.fullName ?? professional.full_name, email: professional.email, phone: professional.phone } : null,
         baseUrl,
       });
+      if (emailResult.sent === false) {
+        console.log('[bookings] Email result:', emailResult.error ?? 'failed');
+      }
+    } else {
+      console.log('[bookings] No professionalId on event type - skipping email');
     }
 
     res.status(201).json({
