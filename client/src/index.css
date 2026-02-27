@@ -10,8 +10,8 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #0a7ea4;
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 button:hover:not(:disabled),
