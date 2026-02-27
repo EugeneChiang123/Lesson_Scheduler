@@ -83,7 +83,7 @@ function wrapInLayout(bodyContent, baseUrl = '') {
   const brandHtml = baseUrl ? `<a href="${baseUrl.replace(/\/$/, '')}" style="color: #0a7ea4;">Lesson Scheduler</a>` : 'Lesson Scheduler';
   const reportLink = baseUrl ? `${baseUrl.replace(/\/$/, '')}/booking/placeholder` : '#';
   return EMAIL_LAYOUT
-    .replace('{{BODY_CONTENT}}', bodyContent || '')
+    .replace('{{BODY_CONTENT}}', () => bodyContent || '')
     .replace('{{BRAND_HTML}}', brandHtml)
     .replace('{{REPORT_LINK}}', reportLink);
 }
