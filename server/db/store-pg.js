@@ -62,6 +62,7 @@ function toEventType(row) {
     location: row.location || '',
     timeZone: row.time_zone || 'America/Los_Angeles',
     priceDollars: row.price_dollars != null ? Number(row.price_dollars) : 0,
+    notificationTemplate: row.notification_template || null,
   };
 }
 
@@ -75,6 +76,7 @@ function toProfessional(row) {
     fullName: row.full_name || '',
     profileSlug: row.profile_slug,
     timeZone: row.time_zone || 'America/Los_Angeles',
+    phone: row.phone || null,
     createdAt: formatTs(row.created_at),
     updatedAt: formatTs(row.updated_at),
   };
@@ -162,6 +164,14 @@ const store = {
         updates.push(`time_zone = $${n++}`);
         values.push(data.time_zone);
       }
+      if (data.phone !== undefined) {
+        updates.push(`phone = $${n++}`);
+        values.push(data.phone != null ? String(data.phone).substring(0, 255) : null);
+      }
+      if (data.email !== undefined) {
+        updates.push(`email = $${n++}`);
+        values.push(data.email != null ? String(data.email).substring(0, 255) : '');
+      }
       if (updates.length === 0) return store.professionals.getById(id);
       updates.push(`updated_at = now()`);
       values.push(Number(id));
@@ -241,11 +251,12 @@ const store = {
       const location = (data.location != null && String(data.location)) || '';
       const time_zone = data.time_zone || data.timeZone || 'America/Los_Angeles';
       const price_dollars = data.price_dollars != null ? Number(data.price_dollars) : (data.priceDollars != null ? Number(data.priceDollars) : 0);
+      const notification_template = data.notificationTemplate != null ? String(data.notificationTemplate) : null;
       const { rows } = await pool.query(
-        `INSERT INTO event_types (professional_id, slug, name, description, duration_minutes, allow_recurring, recurring_count, availability, location, time_zone, price_dollars)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
+        `INSERT INTO event_types (professional_id, slug, name, description, duration_minutes, allow_recurring, recurring_count, availability, location, time_zone, price_dollars, notification_template)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
          RETURNING *`,
-        [Number(data.professional_id), data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability), location, time_zone, price_dollars]
+        [Number(data.professional_id), data.slug, data.name || '', data.description || '', duration, Boolean(data.allowRecurring), recurringCount, JSON.stringify(availability), location, time_zone, price_dollars, notification_template]
       );
       return toEventType(rows[0]);
     },
@@ -268,12 +279,13 @@ const store = {
       const location = data.location !== undefined ? (data.location != null && String(data.location)) || '' : (existing.location || '');
       const time_zone = data.time_zone !== undefined ? data.time_zone : (data.timeZone !== undefined ? data.timeZone : existing.timeZone);
       const price_dollars = data.price_dollars !== undefined ? Number(data.price_dollars) : (data.priceDollars !== undefined ? Number(data.priceDollars) : existing.priceDollars);
+      const notification_template = data.notificationTemplate !== undefined ? (data.notificationTemplate != null ? String(data.notificationTemplate) : null) : (existing.notificationTemplate != null ? existing.notificationTemplate : null);
       const { rows } = await pool.query(
         `UPDATE event_types
-         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb, location = $8, time_zone = $9, price_dollars = $10
-         WHERE id = $11
+         SET slug = $1, name = $2, description = $3, duration_minutes = $4, allow_recurring = $5, recurring_count = $6, availability = $7::jsonb, location = $8, time_zone = $9, price_dollars = $10, notification_template = $11
+         WHERE id = $12
          RETURNING *`,
-        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), location, time_zone, price_dollars, Number(id)]
+        [slug, name, description, durationMinutes, allowRecurring, recurringCount, JSON.stringify(availability), location, time_zone, price_dollars, notification_template, Number(id)]
       );
       return toEventType(rows[0]);
     },

@@ -10,6 +10,7 @@
     "db:migrate": "node server/db/migrate.js",
     "db:migrate-pg": "node server/db/migrate-pg.js",
     "db:migrate-mvp": "node server/db/migrate-mvp-pg.js",
+    "db:migrate-add-notification-template": "node server/db/migrate-add-notification-template-pg.js",
     "db:seed-pg": "node server/db/seed-from-json.js",
     "workflow-test": "node scripts/workflow-test.js"
   },

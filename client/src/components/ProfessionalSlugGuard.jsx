@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Outlet } from 'react-router-dom';
 import { RESERVED_SLUGS } from '../constants/reservedSlugs';
-import { useApi } from '../api';
+import { useApi, API_BASE } from '../api';
 
 /**
  * Resolves /:professionalSlug: reserved -> /setup; old slug -> redirect to current; else show dashboard via Outlet.
@@ -33,7 +33,7 @@ export default function ProfessionalSlugGuard() {
           setStatus('ok');
           return;
         }
-        return fetch(`/api/professionals/by-slug/${slug}`)
+        return fetch(`${API_BASE}/professionals/by-slug/${slug}`)
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             if (cancelled) return;

@@ -75,7 +75,7 @@ router.patch('/:id', async (req, res) => {
     if (req.professionalId != null && existing.professionalId !== req.professionalId) {
       return res.status(404).json({ error: 'Event type not found' });
     }
-    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location, time_zone, timeZone, price_dollars, priceDollars } = req.body;
+    const { slug, name, description, durationMinutes, allowRecurring, recurringCount, availability, location, time_zone, timeZone, price_dollars, priceDollars, notificationTemplate } = req.body;
     const updated = await store.eventTypes.update(id, {
       slug,
       name,
@@ -87,6 +87,7 @@ router.patch('/:id', async (req, res) => {
       location,
       time_zone: time_zone ?? timeZone,
       price_dollars: price_dollars ?? priceDollars,
+      notificationTemplate,
     });
     res.json(updated);
   } catch (err) {

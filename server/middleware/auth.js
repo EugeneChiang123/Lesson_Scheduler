@@ -64,6 +64,15 @@ async function requireProfessional(req, res, next) {
       }
       return res.status(500).json({ error: err.message || 'Failed to create professional' });
     }
+  } else {
+    const tokenEmail = (payload.email || payload.primary_email || '').trim();
+    if (tokenEmail && (!professional.email || !professional.email.trim())) {
+      try {
+        professional = await store.professionals.update(professional.id, { email: tokenEmail });
+      } catch (err) {
+        // non-fatal: continue with existing professional
+      }
+    }
   }
 
   req.professional = professional;

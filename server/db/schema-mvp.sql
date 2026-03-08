@@ -15,6 +15,7 @@ CREATE TABLE professionals (
   full_name VARCHAR(255) NOT NULL DEFAULT '',
   profile_slug VARCHAR(255) UNIQUE NOT NULL,
   time_zone VARCHAR(63) NOT NULL DEFAULT 'America/Los_Angeles',
+  phone VARCHAR(255),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -58,6 +59,7 @@ CREATE TABLE event_types (
   location VARCHAR(512),
   time_zone VARCHAR(63) NOT NULL DEFAULT 'America/Los_Angeles',
   price_dollars DECIMAL(10,2) NOT NULL DEFAULT 0,
+  notification_template TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

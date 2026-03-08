@@ -8,6 +8,7 @@ import SetupEventForm from './pages/SetupEventForm';
 import BookingsCalendar from './pages/BookingsCalendar';
 import EventEditPage from './pages/EventEditPage';
 import BookingPlaceholderPage from './pages/BookingPlaceholderPage';
+import NotificationTemplatePage from './pages/NotificationTemplatePage';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
 
@@ -18,6 +19,8 @@ const instructorChildRoutes = [
   { path: 'bookings', element: <BookingsCalendar />, key: 'bookings' },
   { path: 'new', element: <SetupEventForm />, key: 'new' },
   { path: ':id/edit', element: <SetupEventForm />, key: 'edit' },
+  { path: 'notification-template', element: <NotificationTemplatePage />, key: 'notification-template' },
+  { path: 'notification-template/:eventTypeId', element: <NotificationTemplatePage />, key: 'notification-template-id' },
 ];
 
 function renderInstructorChildRoutes() {
