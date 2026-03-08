@@ -6,7 +6,11 @@
 import { useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 
-const API_BASE = '/api';
+// Base URL for API requests.
+// - In web builds, leave VITE_API_URL unset to use relative '/api' (works with the dev proxy and same-origin deployments).
+// - For native (iOS/Android) builds, set VITE_API_URL to your full API base, e.g. 'https://your-api.example.com/api'.
+const RAW_API_BASE = import.meta.env.VITE_API_URL ?? '/api';
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
 export function useApi() {
   const { getToken } = useAuth();

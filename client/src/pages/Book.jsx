@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { theme } from '../styles/theme';
 import { formatDuration } from '../utils/formatDuration';
+import { API_BASE } from '../api';
 
-const API = '/api';
+const API = API_BASE;
 
 function getTimeZoneLabel() {
   try {
